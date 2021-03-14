@@ -5,14 +5,18 @@ fn main() {
 
   for png_chunk in PngChunkIter::from_png_bytes(&bytes).unwrap() {
     println!("{:?}", png_chunk);
-    println!("Actual CRC: {:?}", png_chunk.get_actual_crc());
+    println!("> Actual CRC: {:?}", png_chunk.get_actual_crc());
   }
 
-  // TODO: get temp memory requirements.
+  let header = PngHeader::from_ihdr_chunk(PngChunkIter::from_png_bytes(&bytes).unwrap().next().unwrap()).unwrap();
+  println!("{:?}", header);
+  println!("> temp memory required: {:?}", header.get_temp_memory_requirements().unwrap());
+  println!("> RGBA8888 memory required: {:?}", header.width * header.height * 4);
 
-  // TODO: get final memory requirements.
-
-  // TODO: decompress IDAT into temp memory.
+  let mut temp_buffer = vec![0; header.get_temp_memory_requirements().unwrap()];
+  decompress_idat_to(&mut temp_buffer, &bytes);
+  println!("Decompressed the IDAT into the temp buffer!");
+  println!("> {:?}", temp_buffer);
 
   // TODO: un-filter temp memory into final memory.
 }
