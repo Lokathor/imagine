@@ -14,9 +14,9 @@ fn main() {
   println!("> RGBA8888 memory required: {:?}", header.width * header.height * 4);
 
   let mut temp_buffer = vec![0; header.get_temp_memory_requirements().unwrap()];
-  decompress_idat_to(&mut temp_buffer, &bytes);
-  println!("Decompressed the IDAT into the temp buffer!");
-  println!("> {:?}", temp_buffer);
+  let decompress_result = decompress_idat_to(&mut temp_buffer, &bytes);
+  println!("decompression result: {:?}", decompress_result);
+  println!("temp_buffer> {:?}", temp_buffer);
 
   // TODO: un-filter temp memory into final memory.
 }
