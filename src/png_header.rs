@@ -22,7 +22,15 @@ impl PngHeader {
     let compression_method = PngCompressionMethod(chunk.chunk_data[10]);
     let filter_method = PngFilterMethod(chunk.chunk_data[11]);
     let interlace_method = PngInterlaceMethod(chunk.chunk_data[12]);
-    Some(Self { width, height, bit_depth, color_type, compression_method, filter_method, interlace_method })
+    Some(Self {
+      width,
+      height,
+      bit_depth,
+      color_type,
+      compression_method,
+      filter_method,
+      interlace_method,
+    })
   }
 
   pub fn get_temp_memory_requirements(self) -> Option<usize> {
@@ -40,9 +48,15 @@ impl PngHeader {
         let bits_per_scanline = w.checked_mul(self.bit_depth as usize)?;
         (bits_per_scanline + 7) / 8
       }
-      PngColorType::RGB if [8, 16].contains(&self.bit_depth) => w.checked_mul(3 * (self.bit_depth as usize / 8))?,
-      PngColorType::YA if [8, 16].contains(&self.bit_depth) => w.checked_mul(2 * (self.bit_depth as usize / 8))?,
-      PngColorType::RGBA if [8, 16].contains(&self.bit_depth) => w.checked_mul(4 * (self.bit_depth as usize / 8))?,
+      PngColorType::RGB if [8, 16].contains(&self.bit_depth) => {
+        w.checked_mul(3 * (self.bit_depth as usize / 8))?
+      }
+      PngColorType::YA if [8, 16].contains(&self.bit_depth) => {
+        w.checked_mul(2 * (self.bit_depth as usize / 8))?
+      }
+      PngColorType::RGBA if [8, 16].contains(&self.bit_depth) => {
+        w.checked_mul(4 * (self.bit_depth as usize / 8))?
+      }
       _ => return None,
     };
     Some((bytes_per_scanline + 1) * h)

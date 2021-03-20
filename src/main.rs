@@ -8,9 +8,15 @@ fn main() {
     println!("> Actual CRC: {:?}", png_chunk.get_actual_crc());
   }
 
-  let header = PngHeader::from_ihdr_chunk(PngChunkIter::from_png_bytes(&bytes).unwrap().next().unwrap()).unwrap();
+  let header = PngHeader::from_ihdr_chunk(
+    PngChunkIter::from_png_bytes(&bytes).unwrap().next().unwrap(),
+  )
+  .unwrap();
   println!("{:?}", header);
-  println!("> temp memory required: {:?}", header.get_temp_memory_requirements().unwrap());
+  println!(
+    "> temp memory required: {:?}",
+    header.get_temp_memory_requirements().unwrap()
+  );
   println!("> RGBA8888 memory required: {:?}", header.width * header.height * 4);
 
   let mut temp_buffer = vec![0; header.get_temp_memory_requirements().unwrap()];
