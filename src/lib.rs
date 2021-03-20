@@ -27,6 +27,24 @@ pub use png_header::*;
 mod bit_source;
 use bit_source::*;
 
+mod huff_symbol;
+use huff_symbol::*;
+
+mod tree_entry;
+use tree_entry::*;
+
+mod code_length_alphabet;
+use code_length_alphabet::*;
+
+mod lit_len_alphabet;
+use lit_len_alphabet::*;
+
+mod dist_alphabet;
+use dist_alphabet::*;
+
+mod fixed_huffman_tree;
+use fixed_huffman_tree::*;
+
 pub type PngResult<T> = Result<T, PngError>;
 
 #[derive(Debug, Clone, Copy)]
@@ -39,6 +57,8 @@ pub enum PngError {
   IllegalFlagCheck,
   IllegalFlagDictionary,
   IllegalBlockType,
+  CouldNotFindLitLenSymbol,
+  CouldNotFindDistSymbol,
 }
 
 pub fn decompress_idat_to(out: &mut [u8], png_bytes: &[u8]) -> PngResult<()> {
@@ -101,24 +121,41 @@ fn decompress_deflate_to<'b, I: Iterator<Item = &'b [u8]>>(
 ) -> PngResult<()> {
   trace!("decompress_deflate_to> {:?}", bit_src);
 
-  loop {
+  'per_block: loop {
     trace!("Begin Block Loop");
 
-    let is_final_block = bit_src.get_bfinal()?;
+    let is_final_block = bit_src.next_bfinal()?;
     trace!("{:?}", bit_src);
     trace!("is_final_block: {:?}", is_final_block);
 
-    let block_type = bit_src.get_btype()?;
+    let block_type = bit_src.next_btype()?;
     trace!("{:?}", bit_src);
     trace!("block_type: {:02b}", block_type);
     debug_assert!(block_type < 0b100);
 
-    match block_type {
-      0 => (),
-      1 => (),
-      2 => (),
-      3 => return Err(PngError::IllegalBlockType),
-      _ => unimplemented!(),
+    if block_type == 0b00 {
+      todo!("handle no-compression")
+    } else {
+      let (lit_len_alphabet, dist_alphabet) = if block_type == 0b11 {
+        todo!("read dynamic tree")
+      } else {
+        let mut dist_alphabet = DistAlphabet::default();
+        dist_alphabet.tree.iter_mut().for_each(|m| m.bit_count = 5);
+        dist_alphabet.refresh();
+        (FIXED_HUFFMAN_TREE, dist_alphabet)
+      };
+      'per_symbol: loop {
+        let lit_len = lit_len_alphabet.pull_and_match(bit_src)?;
+        match lit_len {
+          0..=255 => todo!("push literal"),
+          256 => break 'per_symbol,
+          _ => {
+            debug_assert!(lit_len <= 285);
+            todo!("get a distance");
+            todo!("push repetition");
+          }
+        }
+      }
     }
 
     if is_final_block {

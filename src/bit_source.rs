@@ -1,6 +1,6 @@
 use super::*;
 
-pub struct BitSource<'b, I> {
+pub(crate) struct BitSource<'b, I> {
   current: &'b [u8],
   more: I,
   spare_bits: u32,
@@ -62,7 +62,22 @@ impl<'b, I: Iterator<Item = &'b [u8]>> BitSource<'b, I> {
     Ok(())
   }
 
-  pub fn get_bfinal(&mut self) -> PngResult<bool> {
+  pub fn next_bfinal(&mut self) -> PngResult<bool> {
+    self.next_one_bit()
+  }
+
+  pub fn next_btype(&mut self) -> PngResult<u32> {
+    if self.spare_bit_count < 2 {
+      self.feed(2)?;
+    }
+    debug_assert!(self.spare_bit_count >= 2);
+    let btype = self.spare_bits & 0b11;
+    self.spare_bits >>= 2;
+    self.spare_bit_count -= 2;
+    Ok(btype)
+  }
+
+  pub fn next_one_bit(&mut self) -> PngResult<bool> {
     if self.spare_bit_count < 1 {
       self.feed(1)?;
     }
@@ -73,14 +88,22 @@ impl<'b, I: Iterator<Item = &'b [u8]>> BitSource<'b, I> {
     Ok(bfinal)
   }
 
-  pub fn get_btype(&mut self) -> PngResult<u32> {
-    if self.spare_bit_count < 2 {
-      self.feed(2)?;
+  /// Read the next `count` bits, use with huffman data elements.
+  pub fn next_bits_msb(&mut self, count: u32) -> PngResult<usize> {
+    let mut out = 0;
+    for _ in 0..count {
+      out <<= 1;
+      out |= usize::from(self.next_one_bit()?);
     }
-    debug_assert!(self.spare_bit_count >= 2);
-    let btype = self.spare_bits & 0b11;
-    self.spare_bits >>= 2;
-    self.spare_bit_count -= 2;
-    Ok(btype)
+    Ok(out)
+  }
+
+  /// Read the next `count` bits, use with non-huffman data elements.
+  pub fn read_bits_lsb(&mut self, count: u32) -> PngResult<usize> {
+    let mut out = 0;
+    for tracker in 0..count {
+      out |= usize::from(self.next_one_bit()?) << tracker;
+    }
+    Ok(out)
   }
 }
