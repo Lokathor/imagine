@@ -126,4 +126,20 @@ impl<'b, I: Iterator<Item = &'b [u8]>> BitSource<'b, I> {
     //}
     //Ok(out)
   }
+
+  pub fn flush_spare_bits(&mut self) {
+    trace!("flush_spare_bits");
+    self.spare_bit_count = 0;
+    self.spare_bits = 0;
+  }
+
+  pub fn next_len_nlen(&mut self) -> PngResult<(u16, u16)> {
+    debug_assert_eq!(0, self.spare_bit_count);
+    debug_assert_eq!(0, self.spare_bits);
+    let a = self.grab_byte()?;
+    let b = self.grab_byte()?;
+    let c = self.grab_byte()?;
+    let d = self.grab_byte()?;
+    Ok((u16::from_be_bytes([a, b]), u16::from_be_bytes([c, d])))
+  }
 }

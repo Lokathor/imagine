@@ -61,10 +61,12 @@ pub enum PngError {
   CouldNotFindDistSymbol,
   OutputOverflow,
   BackRefToBeforeOutputStart,
+  LenAndNLenDidNotMatch,
   DidNotWriteAdler32Yet,
 }
 
-pub fn decompress_idat_to(out: &mut [u8], png_bytes: &[u8]) -> PngResult<()> {
+/// Return: the number of bytes written
+pub fn decompress_idat_to(out: &mut [u8], png_bytes: &[u8]) -> PngResult<usize> {
   decompress_zlib_to(
     out,
     PngChunkIter::from_png_bytes(png_bytes)?
@@ -73,9 +75,10 @@ pub fn decompress_idat_to(out: &mut [u8], png_bytes: &[u8]) -> PngResult<()> {
   )
 }
 
+/// Return: the number of bytes written
 fn decompress_zlib_to<'b>(
   out: &mut [u8], mut slices: impl Iterator<Item = &'b [u8]>,
-) -> PngResult<()> {
+) -> PngResult<usize> {
   let mut cur_slice = slices.next().ok_or(PngError::UnexpectedEndOfInput)?;
   trace!("decompress_zlib_to> {:?}", cur_slice);
   //
@@ -119,9 +122,10 @@ fn decompress_zlib_to<'b>(
   Err(PngError::DidNotWriteAdler32Yet)
 }
 
+/// Return: the number of bytes written
 fn decompress_deflate_to<'b, I: Iterator<Item = &'b [u8]>>(
   out: &mut [u8], bit_src: &mut BitSource<'b, I>,
-) -> PngResult<()> {
+) -> PngResult<usize> {
   trace!("decompress_deflate_to> {:?}", bit_src);
 
   let mut out_position = 0;
@@ -140,7 +144,11 @@ fn decompress_deflate_to<'b, I: Iterator<Item = &'b [u8]>>(
 
     if block_type == 0b00 {
       trace!("uncompressed block");
-      todo!("handle no-compression")
+      let (len, nlen) = bit_src.next_len_nlen()?;
+      if !len != nlen {
+        return Err(PngError::LenAndNLenDidNotMatch);
+      }
+      todo!("consume LEN bytes directly to the output")
     } else {
       let (lit_len_alphabet, dist_alphabet) = if block_type == 0b11 {
         trace!("reading dynamic tree data");
@@ -200,12 +208,17 @@ fn decompress_deflate_to<'b, I: Iterator<Item = &'b [u8]>>(
               .ok_or(PngError::BackRefToBeforeOutputStart)?;
             trace!("start position of back ref: {}", start_of_back_dist);
             if out_position + len <= out.len() {
-              let mut d = start_of_back_dist;
-              (0..len).for_each(|_| {
-                out[out_position] = out[d];
-                out_position += 1;
-                d += 1;
-              });
+              //let mut d = start_of_back_dist;
+              //(0..len).for_each(|_| {
+              //  out[out_position] = out[d];
+              //  out_position += 1;
+              //  d += 1;
+              //});
+              out.copy_within(
+                start_of_back_dist..(start_of_back_dist + len),
+                out_position,
+              );
+              out_position += len;
             } else {
               return Err(PngError::OutputOverflow);
             }
@@ -215,7 +228,7 @@ fn decompress_deflate_to<'b, I: Iterator<Item = &'b [u8]>>(
     }
 
     if is_final_block {
-      return Ok(());
+      return Ok(out_position);
     }
   }
 }
