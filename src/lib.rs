@@ -59,6 +59,9 @@ pub enum PngError {
   IllegalBlockType,
   CouldNotFindLitLenSymbol,
   CouldNotFindDistSymbol,
+  OutputOverflow,
+  BackRefToBeforeOutputStart,
+  DidNotWriteAdler32Yet,
 }
 
 pub fn decompress_idat_to(out: &mut [u8], png_bytes: &[u8]) -> PngResult<()> {
@@ -113,7 +116,7 @@ fn decompress_zlib_to<'b>(
   decompress_deflate_to(out, &mut bit_source)?;
 
   // TODO: read zlib adler32
-  Err(PngError::UnexpectedEndOfInput)
+  Err(PngError::DidNotWriteAdler32Yet)
 }
 
 fn decompress_deflate_to<'b, I: Iterator<Item = &'b [u8]>>(
@@ -121,38 +124,91 @@ fn decompress_deflate_to<'b, I: Iterator<Item = &'b [u8]>>(
 ) -> PngResult<()> {
   trace!("decompress_deflate_to> {:?}", bit_src);
 
+  let mut out_position = 0;
+
   'per_block: loop {
     trace!("Begin Block Loop");
 
-    let is_final_block = bit_src.next_bfinal()?;
     trace!("{:?}", bit_src);
+    let is_final_block = bit_src.next_bfinal()?;
     trace!("is_final_block: {:?}", is_final_block);
 
-    let block_type = bit_src.next_btype()?;
     trace!("{:?}", bit_src);
+    let block_type = bit_src.next_btype()?;
     trace!("block_type: {:02b}", block_type);
     debug_assert!(block_type < 0b100);
 
     if block_type == 0b00 {
+      trace!("uncompressed block");
       todo!("handle no-compression")
     } else {
       let (lit_len_alphabet, dist_alphabet) = if block_type == 0b11 {
+        trace!("reading dynamic tree data");
         todo!("read dynamic tree")
       } else {
+        trace!("using fixed tree data");
         let mut dist_alphabet = DistAlphabet::default();
         dist_alphabet.tree.iter_mut().for_each(|m| m.bit_count = 5);
         dist_alphabet.refresh();
         (FIXED_HUFFMAN_TREE, dist_alphabet)
       };
+      trace!("{:?}", bit_src);
       'per_symbol: loop {
+        trace!("pre-lit-len: {:?}", bit_src);
         let lit_len = lit_len_alphabet.pull_and_match(bit_src)?;
         match lit_len {
-          0..=255 => todo!("push literal"),
+          lit @ 0..=255 => {
+            if out_position < out.len() {
+              trace!("pushing literal '{}'", lit);
+              out[out_position] = lit as u8;
+              out_position += 1;
+            } else {
+              return Err(PngError::OutputOverflow);
+            }
+          }
           256 => break 'per_symbol,
-          _ => {
+          len_symbol => {
             debug_assert!(lit_len <= 285);
-            todo!("get a distance");
-            todo!("push repetition");
+            let len = if len_symbol <= 264 {
+              len_symbol - 254
+            } else if len_symbol <= 284 {
+              let num_extra_bits = (len_symbol - 261) / 4;
+              ((len_symbol - 265) % 4 + 4)
+                << num_extra_bits + 3 + bit_src.next_bits_lsb(num_extra_bits as u32)?
+            } else {
+              258
+            };
+            trace!("back ref len: {}", len);
+            let dist = {
+              let dist_sym = dist_alphabet.pull_and_match(bit_src)?;
+              debug_assert!(dist_sym <= 29);
+              if dist_sym <= 3 {
+                dist_sym + 1
+              } else if dist_sym <= 29 {
+                let num_extra_bits = dist_sym / 2 - 1;
+                ((dist_sym % 2 + 2) << num_extra_bits)
+                  + 1
+                  + bit_src.next_bits_lsb(num_extra_bits as u32)?
+              } else {
+                panic!("illegal dist sym from the dist_alphabet")
+              }
+            };
+            trace!("back ref dist: {}", dist);
+            trace!("pushing back ref: <{}, {}>", len, dist);
+            let start_of_back_dist = out_position
+              .checked_sub(dist)
+              .ok_or(PngError::BackRefToBeforeOutputStart)?;
+            trace!("start position of back ref: {}", start_of_back_dist);
+            if out_position + len <= out.len() {
+              let mut d = start_of_back_dist;
+              (0..len).for_each(|_| {
+                out[out_position] = out[d];
+                out_position += 1;
+                d += 1;
+              });
+            } else {
+              return Err(PngError::OutputOverflow);
+            }
           }
         }
       }

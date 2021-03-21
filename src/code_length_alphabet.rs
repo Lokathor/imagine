@@ -70,7 +70,7 @@ impl CodeLengthAlphabet {
         }
         16 => {
           //trace!("previous");
-          let bits_of_length = bi.read_bits_lsb(2)?;
+          let bits_of_length = bi.next_bits_lsb(2)?;
           let repeat_count = 3 + bits_of_length;
           //dump!(bits_of_length, repeat_count);
           debug_assert!(repeat_count >= 3 && repeat_count <= 6);
@@ -82,7 +82,7 @@ impl CodeLengthAlphabet {
         }
         17 => {
           //trace!("short 0 sequence");
-          let bits_of_length = bi.read_bits_lsb(3)?;
+          let bits_of_length = bi.next_bits_lsb(3)?;
           let repeat_count = 3 + bits_of_length;
           //dump!(bits_of_length, repeat_count);
           debug_assert!(repeat_count >= 3 && repeat_count <= 10);
@@ -93,7 +93,7 @@ impl CodeLengthAlphabet {
         }
         18 => {
           //trace!("long 0 sequence");
-          let bits_of_length = bi.read_bits_lsb(7)?;
+          let bits_of_length = bi.next_bits_lsb(7)?;
           let repeat_count = 11 + bits_of_length;
           //dump!(bits_of_length, repeat_count);
           debug_assert!(repeat_count >= 11 && repeat_count <= 138);

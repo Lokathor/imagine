@@ -41,7 +41,9 @@ impl<'b, I> BitSource<'b, I> {
 
 impl<'b, I: Iterator<Item = &'b [u8]>> BitSource<'b, I> {
   fn grab_byte(&mut self) -> PngResult<u8> {
+    trace!("grab_byte");
     if self.current.is_empty() {
+      trace!("current slice empty, pulling from iterator");
       self.current = self.more.next().ok_or(PngError::UnexpectedEndOfInput)?;
     }
     debug_assert!(self.current.len() > 0);
@@ -51,6 +53,7 @@ impl<'b, I: Iterator<Item = &'b [u8]>> BitSource<'b, I> {
   }
 
   fn feed(&mut self, count_after: u32) -> PngResult<()> {
+    trace!("feed({})", count_after);
     debug_assert!(count_after > 0);
     debug_assert!(count_after < 24);
     debug_assert!(count_after > self.spare_bit_count);
@@ -66,18 +69,12 @@ impl<'b, I: Iterator<Item = &'b [u8]>> BitSource<'b, I> {
     self.next_one_bit()
   }
 
-  pub fn next_btype(&mut self) -> PngResult<u32> {
-    if self.spare_bit_count < 2 {
-      self.feed(2)?;
-    }
-    debug_assert!(self.spare_bit_count >= 2);
-    let btype = self.spare_bits & 0b11;
-    self.spare_bits >>= 2;
-    self.spare_bit_count -= 2;
-    Ok(btype)
+  pub fn next_btype(&mut self) -> PngResult<usize> {
+    self.next_bits_lsb(2)
   }
 
   pub fn next_one_bit(&mut self) -> PngResult<bool> {
+    trace!("next_one_bit, spare bits: {}", self.spare_bit_count);
     if self.spare_bit_count < 1 {
       self.feed(1)?;
     }
@@ -90,20 +87,43 @@ impl<'b, I: Iterator<Item = &'b [u8]>> BitSource<'b, I> {
 
   /// Read the next `count` bits, use with huffman data elements.
   pub fn next_bits_msb(&mut self, count: u32) -> PngResult<usize> {
-    let mut out = 0;
-    for _ in 0..count {
-      out <<= 1;
-      out |= usize::from(self.next_one_bit()?);
+    trace!("next_bits_msb({})", count);
+    if self.spare_bit_count < count {
+      self.feed(count)?;
     }
-    Ok(out)
+    debug_assert!(self.spare_bit_count >= count);
+    let bits = {
+      let rev = (self.spare_bits & ((1 << count) - 1)).reverse_bits();
+      rev >> (32 - count)
+    };
+    self.spare_bits >>= count;
+    self.spare_bit_count -= count;
+    Ok(bits as usize)
+    // old style
+    //let mut out = 0;
+    //for _ in 0..count {
+    //  out <<= 1;
+    //  out |= usize::from(self.next_one_bit()?);
+    //}
+    //Ok(out)
   }
 
   /// Read the next `count` bits, use with non-huffman data elements.
-  pub fn read_bits_lsb(&mut self, count: u32) -> PngResult<usize> {
-    let mut out = 0;
-    for tracker in 0..count {
-      out |= usize::from(self.next_one_bit()?) << tracker;
+  pub fn next_bits_lsb(&mut self, count: u32) -> PngResult<usize> {
+    trace!("next_bits_lsb({})", count);
+    if self.spare_bit_count < count {
+      self.feed(count)?;
     }
-    Ok(out)
+    debug_assert!(self.spare_bit_count >= count);
+    let bits = self.spare_bits & ((1 << count) - 1);
+    self.spare_bits >>= count;
+    self.spare_bit_count -= count;
+    Ok(bits as usize)
+    // old style
+    //let mut out = 0;
+    //for tracker in 0..count {
+    //  out |= usize::from(self.next_one_bit()?) << tracker;
+    //}
+    //Ok(out)
   }
 }
