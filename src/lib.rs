@@ -144,7 +144,8 @@ fn decompress_deflate_to<'b, I: Iterator<Item = &'b [u8]>>(
 
     if block_type == 0b00 {
       trace!("uncompressed block");
-      let (len, nlen) = bit_src.next_len_nlen()?;
+      let len = bit_src.next_u16()?;
+      let nlen = bit_src.next_u16()?;
       trace!("len: {:016b}, nlen: {:016b}", len, nlen);
       if !len != nlen {
         return Err(PngError::LenAndNLenDidNotMatch);
@@ -156,7 +157,10 @@ fn decompress_deflate_to<'b, I: Iterator<Item = &'b [u8]>>(
       let (_, mut new) = out.split_at_mut(out_position);
       out_position += len_u;
       while len_u > 0 {
-        let x = bit_src.next_up_to_n_bytes(len_u)?;
+        let x = bit_src.next_up_to_n_bytes(len_u);
+        if x.is_empty() {
+          return Err(PngError::UnexpectedEndOfInput);
+        }
         debug_assert!(new.len() >= x.len());
         let (mut new_head, new_tail) = new.split_at_mut(x.len());
         new_head.copy_from_slice(x);
