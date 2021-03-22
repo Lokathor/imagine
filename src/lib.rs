@@ -145,19 +145,62 @@ fn decompress_deflate_to<'b, I: Iterator<Item = &'b [u8]>>(
     if block_type == 0b00 {
       trace!("uncompressed block");
       let (len, nlen) = bit_src.next_len_nlen()?;
+      trace!("len: {:016b}, nlen: {:016b}", len, nlen);
       if !len != nlen {
         return Err(PngError::LenAndNLenDidNotMatch);
       }
-      todo!("consume LEN bytes directly to the output")
+      let mut len_u = len as usize;
+      if out.len() < out_position + len_u {
+        return Err(PngError::OutputOverflow);
+      }
+      let (_, mut new) = out.split_at_mut(out_position);
+      out_position += len_u;
+      while len_u > 0 {
+        let x = bit_src.next_up_to_n_bytes(len_u)?;
+        debug_assert!(new.len() >= x.len());
+        let (mut new_head, new_tail) = new.split_at_mut(x.len());
+        new_head.copy_from_slice(x);
+        new = new_tail;
+        len_u -= x.len();
+      }
     } else {
       let (lit_len_alphabet, dist_alphabet) = if block_type == 0b11 {
+        const DYNAMIC_CODE_LENGTH_ORDER: &[usize] =
+          &[16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1, 15];
+        //
         trace!("reading dynamic tree data");
-        todo!("read dynamic tree")
+        let hlit = bit_src.next_bits_lsb(5)? + 257;
+        let hdist = bit_src.next_bits_lsb(5)? + 1;
+        let hclen = bit_src.next_bits_lsb(4)? + 4;
+        let mut code_length_alphabet = CodeLengthAlphabet::default();
+        for i in DYNAMIC_CODE_LENGTH_ORDER.iter().copied().take(hclen as usize) {
+          code_length_alphabet.tree[i].bit_count = bit_src.next_bits_lsb(3)? as u16;
+        }
+        code_length_alphabet.refresh();
+        //
+        let mut litlen_alphabet = LitLenAlphabet::default();
+        code_length_alphabet.fill_a_tree(
+          hlit as usize,
+          &mut litlen_alphabet.tree,
+          bit_src,
+        )?;
+        litlen_alphabet.refresh();
+        //
+        let mut dist_alphabet = DistAlphabet::default();
+        code_length_alphabet.fill_a_tree(
+          hdist as usize,
+          &mut dist_alphabet.tree,
+          bit_src,
+        )?;
+        dist_alphabet.refresh();
+        //
+        (litlen_alphabet, dist_alphabet)
       } else {
         trace!("using fixed tree data");
         let mut dist_alphabet = DistAlphabet::default();
         dist_alphabet.tree.iter_mut().for_each(|m| m.bit_count = 5);
         dist_alphabet.refresh();
+        // FIXME: we should pre-compute the distance tree and also make that a const.
         (FIXED_HUFFMAN_TREE, dist_alphabet)
       };
       trace!("{:?}", bit_src);

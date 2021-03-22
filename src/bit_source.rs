@@ -142,4 +142,23 @@ impl<'b, I: Iterator<Item = &'b [u8]>> BitSource<'b, I> {
     let d = self.grab_byte()?;
     Ok((u16::from_be_bytes([a, b]), u16::from_be_bytes([c, d])))
   }
+
+  pub fn next_up_to_n_bytes(&mut self, n: usize) -> PngResult<&[u8]> {
+    trace!("next_up_to_n_bytes");
+    if self.current.is_empty() {
+      trace!("current slice empty, pulling from iterator");
+      self.current = self.more.next().ok_or(PngError::UnexpectedEndOfInput)?;
+    }
+    if self.current.len() > n {
+      // grab only part of current
+      let (a, b) = self.current.split_at(n);
+      self.current = b;
+      Ok(a)
+    } else {
+      // grab *all* of current
+      let out = self.current;
+      self.current = &[];
+      Ok(out)
+    }
+  }
 }

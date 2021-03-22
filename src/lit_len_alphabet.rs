@@ -9,7 +9,7 @@ pub(crate) struct LitLenAlphabet {
 impl LitLenAlphabet {
   const COUNT: usize = 286;
 
-  fn refresh(&mut self) {
+  pub fn refresh(&mut self) {
     TreeEntry::fill_in_the_codes(&mut self.tree);
 
     self.min_bit_count = 15;

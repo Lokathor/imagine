@@ -1,17 +1,17 @@
 use super::*;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-struct CodeLengthAlphabet {
+pub(crate) struct CodeLengthAlphabet {
   /// important data
-  tree: [TreeEntry; Self::COUNT],
+  pub tree: [TreeEntry; Self::COUNT],
   /// min and max just help speed up the matching process
-  min_bit_count: u16,
-  max_bit_count: u16,
+  pub min_bit_count: u16,
+  pub max_bit_count: u16,
 }
 impl CodeLengthAlphabet {
   const COUNT: usize = 19;
 
-  fn refresh(&mut self) {
+  pub fn refresh(&mut self) {
     TreeEntry::fill_in_the_codes(&mut self.tree);
 
     self.min_bit_count = 15;
@@ -55,7 +55,7 @@ impl CodeLengthAlphabet {
     }
   }
 
-  fn fill_a_tree<'b, I: Iterator<Item = &'b [u8]>>(
+  pub fn fill_a_tree<'b, I: Iterator<Item = &'b [u8]>>(
     &self, element_count: usize, tree: &mut [TreeEntry], bi: &mut BitSource<'b, I>,
   ) -> PngResult<()> {
     let mut code_lengths_acquired = 0_usize;
