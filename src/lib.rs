@@ -10,8 +10,10 @@ use core::{
 #[macro_export]
 macro_rules! trace {
   ($($arg:tt)*) => {
-    print!("{file}:{line}> ", file = file!(), line = line!());
-    println!($($arg)*);
+    if cfg!(feature = "trace") {
+      print!("{file}:{line}> ", file = file!(), line = line!());
+      println!($($arg)*);
+    }
   }
 }
 
@@ -63,6 +65,8 @@ pub enum PngError {
   BackRefToBeforeOutputStart,
   LenAndNLenDidNotMatch,
   DidNotWriteAdler32Yet,
+  BadDynamicHuffmanTreeData,
+  InterlaceNotSupported,
 }
 
 /// Return: the number of bytes written
@@ -144,6 +148,7 @@ fn decompress_deflate_to<'b, I: Iterator<Item = &'b [u8]>>(
 
     if block_type == 0b00 {
       trace!("uncompressed block");
+      bit_src.flush_spare_bits();
       let len = bit_src.next_u16()?;
       let nlen = bit_src.next_u16()?;
       trace!("len: {:016b}, nlen: {:016b}", len, nlen);

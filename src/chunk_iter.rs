@@ -22,19 +22,40 @@ impl<'b> Iterator for PngChunkIter<'b> {
   type Item = PngChunk<'b>;
 
   fn next(&mut self) -> Option<PngChunk<'b>> {
-    if self.bytes.len() < 12 {
+    // Note(Lokathor): this combines the bounds check of the length and
+    // chunk_type since they're both a fixed size.
+    if self.bytes.len() < 8 {
+      self.bytes = &[];
       return None;
     }
-    let length = u32::from_be_bytes(self.bytes[0..4].try_into().unwrap());
-    let chunk_type = ChunkType(self.bytes[4..8].try_into().unwrap());
+    //
+    let length = {
+      let (l_bytes, rest) = self.bytes.split_at(4);
+      self.bytes = rest;
+      u32::from_be_bytes(l_bytes.try_into().unwrap())
+    };
+    //
+    let chunk_type = {
+      let (chunk_bytes, rest) = self.bytes.split_at(4);
+      self.bytes = rest;
+      ChunkType(chunk_bytes.try_into().unwrap())
+    };
+    // Note(Lokathor): Now we combine the bounds checks for both the data and
+    // the CRC value after the data.
     if self.bytes.len() < (length as usize) + 4 {
+      self.bytes = &[];
       return None;
-    }
-    let chunk_data = &self.bytes[8..(8 + length as usize)];
-    let declared_crc = u32::from_be_bytes(
-      self.bytes[(8 + length as usize)..(8 + length as usize + 4)].try_into().unwrap(),
-    );
-    self.bytes = &self.bytes[(8 + length as usize + 4)..];
+    };
+    let chunk_data = {
+      let (chunk_bytes, rest) = self.bytes.split_at(length as usize);
+      self.bytes = rest;
+      chunk_bytes
+    };
+    let declared_crc = {
+      let (declared_crc_bytes, rest) = self.bytes.split_at(4);
+      self.bytes = rest;
+      u32::from_be_bytes(declared_crc_bytes.try_into().unwrap())
+    };
     Some(PngChunk { length, chunk_type, chunk_data, declared_crc })
   }
 

@@ -88,6 +88,9 @@ impl<'b, I: Iterator<Item = &'b [u8]>> BitSource<'b, I> {
   /// Read the next `count` bits, use with huffman data elements.
   pub fn next_bits_msb(&mut self, count: u32) -> PngResult<usize> {
     trace!("next_bits_msb({})", count);
+    if count == 0 {
+      return Ok(0);
+    }
     if self.spare_bit_count < count {
       self.feed(count)?;
     }
@@ -111,6 +114,9 @@ impl<'b, I: Iterator<Item = &'b [u8]>> BitSource<'b, I> {
   /// Read the next `count` bits, use with non-huffman data elements.
   pub fn next_bits_lsb(&mut self, count: u32) -> PngResult<usize> {
     trace!("next_bits_lsb({})", count);
+    if count == 0 {
+      return Ok(0);
+    }
     if self.spare_bit_count < count {
       self.feed(count)?;
     }

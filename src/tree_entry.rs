@@ -1,3 +1,5 @@
+use super::*;
+
 #[derive(Clone, Copy, PartialEq, Eq, Default)]
 pub(crate) struct TreeEntry {
   pub(crate) bit_pattern: u16,
@@ -24,12 +26,12 @@ impl TreeEntry {
   /// * `bit_count` must be 15 or less or it will be ignored.
   /// * `bit_count` 0 means that the TreeEntry doesn't participate in
   ///   `bit_pattern` generation at all.
-  pub(crate) fn fill_in_the_codes(tree: &mut [TreeEntry]) {
-    // TODO: better guard against totally bogus data! We should be able to detect
-    // an overflow or underflow of the table and report it right away.
-    if tree.is_empty() {
-      return;
-    }
+  pub(crate) fn fill_in_the_codes(tree: &mut [TreeEntry]) -> PngResult<()> {
+    assert!(
+      tree.len() > 0,
+      "It's a programmer error if you're trying to fill in an empty tree"
+    );
+
     let max_bits = usize::from(tree.iter().map(|te| te.bit_count).max().unwrap());
 
     // 1) Count the number of codes for each code length.
@@ -56,20 +58,16 @@ impl TreeEntry {
     for te in tree.iter_mut() {
       let len = usize::from(te.bit_count);
       if len != 0 {
-        // debug assert that the bits _above_ this length are all clear bits in
-        // the code we're about to assign.
-        debug_assert_eq!(
-          next_code[len] & !((1 << len) - 1),
-          0,
-          "bit pattern and bit length mismatch while attempting to fill tree {:?}",
-          tree
-        );
-        //dump!(len);
-        //dump!("{:016b}", next_code[len]);
-        te.bit_pattern = next_code[len];
-        next_code[len] += 1;
+        if next_code[len] & !((1 << len) - 1) == 0 {
+          te.bit_pattern = next_code[len];
+          next_code[len] += 1;
+        } else {
+          return Err(PngError::BadDynamicHuffmanTreeData);
+        }
       }
     }
+
+    Ok(())
   }
 }
 

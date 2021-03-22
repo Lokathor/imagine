@@ -11,8 +11,8 @@ pub(crate) struct CodeLengthAlphabet {
 impl CodeLengthAlphabet {
   const COUNT: usize = 19;
 
-  pub fn refresh(&mut self) {
-    TreeEntry::fill_in_the_codes(&mut self.tree);
+  pub fn refresh(&mut self) -> PngResult<()> {
+    TreeEntry::fill_in_the_codes(&mut self.tree)?;
 
     self.min_bit_count = 15;
     self.max_bit_count = 0;
@@ -29,6 +29,7 @@ impl CodeLengthAlphabet {
       self.min_bit_count,
       self.max_bit_count
     );
+    Ok(())
   }
 
   fn pull_and_match<'b, I: Iterator<Item = &'b [u8]>>(
@@ -70,9 +71,11 @@ impl CodeLengthAlphabet {
         }
         16 => {
           //trace!("previous");
+          if code_lengths_acquired == 0 {
+            return Err(PngError::BadDynamicHuffmanTreeData);
+          }
           let bits_of_length = bi.next_bits_lsb(2)?;
           let repeat_count = 3 + bits_of_length;
-          //dump!(bits_of_length, repeat_count);
           debug_assert!(repeat_count >= 3 && repeat_count <= 6);
           for _ in 0..repeat_count {
             tree[code_lengths_acquired].bit_count =

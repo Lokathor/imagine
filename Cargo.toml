@@ -10,3 +10,7 @@ license = "Zlib OR Apache-2.0 OR MIT"
 [dev-dependencies]
 fermium = { version = "20014", features = ["experimental_fast_build"] }
 gl33 = "0.2"
+
+[features]
+default = ["trace"]
+trace = []

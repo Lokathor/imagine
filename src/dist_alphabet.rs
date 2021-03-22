@@ -9,8 +9,8 @@ pub(crate) struct DistAlphabet {
 impl DistAlphabet {
   const COUNT: usize = 30;
 
-  pub fn refresh(&mut self) {
-    TreeEntry::fill_in_the_codes(&mut self.tree);
+  pub fn refresh(&mut self) -> PngResult<()> {
+    TreeEntry::fill_in_the_codes(&mut self.tree)?;
 
     self.min_bit_count = 15;
     self.max_bit_count = 0;
@@ -27,6 +27,7 @@ impl DistAlphabet {
       self.min_bit_count,
       self.max_bit_count
     );
+    Ok(())
   }
 
   pub fn pull_and_match<'b, I: Iterator<Item = &'b [u8]>>(
