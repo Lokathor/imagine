@@ -9,6 +9,7 @@ fn main() {
     println!("test1.png: {:?}", e);
   }
 
+  /*
   // quick check all the files
   for dir_entry in std::fs::read_dir("target/png/").unwrap().map(Result::unwrap) {
     let path_buf = dir_entry.path();
@@ -21,6 +22,7 @@ fn main() {
       println!("{}: ok!", path_buf.display());
     }
   }
+  */
 }
 
 fn debug_process_a_png_file<P: AsRef<Path>>(
