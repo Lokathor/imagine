@@ -30,7 +30,7 @@ mod decompress;
 pub use decompress::decompress_idat_to;
 
 mod filtering;
-use filtering::*;
+pub use filtering::reconstruct_in_place;
 
 pub type PngResult<T> = Result<T, PngError>;
 
@@ -52,4 +52,11 @@ pub enum PngError {
   DidNotWriteAdler32Yet,
   BadDynamicHuffmanTreeData,
   InterlaceNotSupported,
+  IllegalColorTypeBitDepthCombination,
+  TempMemoryWrongSizeForHeader,
+  NotAnIhdrChunk,
+  IllegalWidthZero,
+  IllegalHeightZero,
+  IllegalFilterMethod,
+  IllegalAdaptiveFilterType,
 }
