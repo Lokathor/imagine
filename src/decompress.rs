@@ -72,10 +72,7 @@ fn decompress_zlib_to<'b>(
   }
 
   let mut bit_source = BitSource::new(cur_slice, slices);
-  decompress_deflate_to(out, &mut bit_source)?;
-
-  // TODO: read zlib adler32
-  Err(PngError::DidNotWriteAdler32Yet)
+  decompress_deflate_to(out, &mut bit_source)
 }
 
 /// Return: the number of bytes written

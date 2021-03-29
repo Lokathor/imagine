@@ -49,7 +49,6 @@ pub enum PngError {
   OutputOverflow,
   BackRefToBeforeOutputStart,
   LenAndNLenDidNotMatch,
-  DidNotWriteAdler32Yet,
   BadDynamicHuffmanTreeData,
   InterlaceNotSupported,
   IllegalColorTypeBitDepthCombination,
