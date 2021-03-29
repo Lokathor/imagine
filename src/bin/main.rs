@@ -1,6 +1,9 @@
 use imagine::*;
 
-use std::path::Path;
+use std::{
+  collections::VecDeque,
+  path::{Path, PathBuf},
+};
 
 fn main() {
   let mut temp_buffer = vec![0; 1000 * 1024 * 1024];
@@ -9,20 +12,16 @@ fn main() {
     println!("test1.png: {:?}", e);
   }
 
-  // /*
-  // quick check all the files
-  for dir_entry in std::fs::read_dir("target/png/").unwrap().map(Result::unwrap) {
-    let path_buf = dir_entry.path();
-    if path_buf.extension().unwrap().to_str().unwrap() != "png" {
-      continue;
+  recursive_read_dir("D:\\art\\", |p| {
+    if p.extension().is_none() || p.extension().unwrap().to_str().unwrap() != "png" {
+      return;
     }
-    if let Err(e) = debug_process_a_png_file(&path_buf, &mut temp_buffer) {
-      println!("{}: {:?}", path_buf.display(), e);
+    if let Err(e) = debug_process_a_png_file(&p, &mut temp_buffer) {
+      println!("{}: {:?}", p.display(), e);
     } else {
-      println!("{}: ok!", path_buf.display());
+      println!("{}: ok!", p.display());
     }
-  }
-  // */
+  });
 }
 
 fn debug_process_a_png_file<P: AsRef<Path>>(
@@ -64,4 +63,61 @@ fn debug_process_a_png_file<P: AsRef<Path>>(
   }
 
   Ok(())
+}
+
+/// Recursively walks over the `path` given, which must be a directory.
+///
+/// Your `op` is passed a [`PathBuf`] for each file found.
+pub fn recursive_read_dir(path: impl AsRef<Path>, mut op: impl FnMut(PathBuf)) {
+  let path = path.as_ref();
+  assert!(path.is_dir());
+  // Note(Lokathor): Being *literally* recursive can blow out the stack for no
+  // reason. Instead, we use a queue based system. Each loop pulls a dir out of
+  // the queue and walks it.
+  // * If we find a sub-directory that goes into the queue for later.
+  // * Files get passed to the `op`
+  // * Symlinks we check if they point to a Dir or File and act accordingly.
+  //
+  // REMINDER: if a symlink makes a loop on the file system then this will trap
+  // us in an endless loop. That's the user's fault!
+  let mut path_q = VecDeque::new();
+  path_q.push_back(PathBuf::from(path));
+  while let Some(path_buf) = path_q.pop_front() {
+    match std::fs::read_dir(&path_buf) {
+      Err(e) => eprintln!("Can't read_dir {path}: {e}", path = path_buf.display(), e = e),
+      Ok(read_dir) => {
+        for result_dir_entry in read_dir {
+          match result_dir_entry {
+            Err(e) => eprintln!("Error with dir entry: {e}", e = e),
+            Ok(dir_entry) => match dir_entry.file_type() {
+              Ok(ft) if ft.is_dir() => path_q.push_back(dir_entry.path()),
+              Ok(ft) if ft.is_file() => op(dir_entry.path()),
+              Ok(ft) if ft.is_symlink() => match dir_entry.metadata() {
+                Ok(metadata) if metadata.is_dir() => path_q.push_back(dir_entry.path()),
+                Ok(metadata) if metadata.is_file() => op(dir_entry.path()),
+                Err(e) => eprintln!(
+                  "Can't get metadata for symlink {path}: {e}",
+                  path = dir_entry.path().display(),
+                  e = e
+                ),
+                _ => eprintln!(
+                  "Found symlink {path} but it's not a file or a directory.",
+                  path = dir_entry.path().display()
+                ),
+              },
+              Err(e) => eprintln!(
+                "Can't get file type of {path}: {e}",
+                path = dir_entry.path().display(),
+                e = e
+              ),
+              _ => eprintln!(
+                "Found dir_entry {path} but it's not a file, directory, or symlink.",
+                path = dir_entry.path().display()
+              ),
+            },
+          }
+        }
+      }
+    }
+  }
 }
