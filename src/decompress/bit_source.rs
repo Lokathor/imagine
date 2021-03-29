@@ -7,6 +7,7 @@ pub(crate) struct BitSource<'b, I> {
   spare_bit_count: u32,
 }
 
+#[cfg(feature = "trace")]
 impl<'b, I: Iterator> core::fmt::Debug for BitSource<'b, I> {
   fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
     let current = {
@@ -17,7 +18,6 @@ impl<'b, I: Iterator> core::fmt::Debug for BitSource<'b, I> {
         [a, b, ..] => format!("..|{b:08b}|{a:08b}|", a = a, b = b),
       }
     };
-    let more_size_hint = self.more.size_hint();
     let spare_bit_count = self.spare_bit_count as usize;
     let spare_bits = if spare_bit_count > 0 {
       format!("{bits:0width$b}", bits = self.spare_bits, width = spare_bit_count)

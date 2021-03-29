@@ -1,6 +1,7 @@
 use super::*;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Clone, Copy, PartialEq, Eq, Default)]
+#[cfg_attr(feature = "trace", derive(Debug))]
 pub(crate) struct CodeLengthAlphabet {
   /// important data
   pub tree: [TreeEntry; Self::COUNT],

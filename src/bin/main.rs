@@ -24,6 +24,7 @@ fn main() {
   });
 }
 
+#[allow(unused)]
 fn debug_process_a_png_file<P: AsRef<Path>>(
   path: P, temp_buffer: &mut Vec<u8>,
 ) -> PngResult<()> {

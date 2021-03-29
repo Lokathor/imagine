@@ -306,7 +306,7 @@ fn test_print_fixed_huffman() {
       _ => panic!(),
     }
   }
-  TreeEntry::fill_in_the_codes(&mut tree);
+  TreeEntry::fill_in_the_codes(&mut tree).unwrap();
   trace!("{:#?}", &tree[..]);
   //panic!();
 }

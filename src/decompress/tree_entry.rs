@@ -5,6 +5,7 @@ pub(crate) struct TreeEntry {
   pub(crate) bit_pattern: u16,
   pub(crate) bit_count: u16,
 }
+#[cfg(feature = "trace")]
 impl core::fmt::Debug for TreeEntry {
   fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
     if f.alternate() {
@@ -80,7 +81,7 @@ fn test_fill_in_the_codes() {
     TreeEntry { bit_count: 3, bit_pattern: 0 },
     TreeEntry { bit_count: 3, bit_pattern: 0 },
   ];
-  TreeEntry::fill_in_the_codes(&mut test_tree);
+  TreeEntry::fill_in_the_codes(&mut test_tree).unwrap();
   let expected_tree = [
     TreeEntry { bit_count: 2, bit_pattern: 0b10 },
     TreeEntry { bit_count: 1, bit_pattern: 0b0 },
@@ -102,7 +103,7 @@ fn test_fill_in_the_codes() {
     TreeEntry { bit_count: 4, bit_pattern: 0 },
     TreeEntry { bit_count: 4, bit_pattern: 0 },
   ];
-  TreeEntry::fill_in_the_codes(&mut test_tree);
+  TreeEntry::fill_in_the_codes(&mut test_tree).unwrap();
   let expected_tree = [
     TreeEntry { bit_count: 3, bit_pattern: 0b010 },
     TreeEntry { bit_count: 3, bit_pattern: 0b011 },
@@ -143,7 +144,7 @@ fn test_fill_in_the_codes() {
   for _ in 280..=287 {
     v.push(TreeEntry { bit_count: 8, bit_pattern: 0 });
   }
-  TreeEntry::fill_in_the_codes(&mut v);
+  TreeEntry::fill_in_the_codes(&mut v).unwrap();
   //
   assert_eq!(v[0].bit_pattern, 0b00110000);
   assert_eq!(v[143].bit_pattern, 0b10111111);

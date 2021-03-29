@@ -3,8 +3,6 @@
 //! > Filters are applied to **bytes**, not to pixels, regardless of the bit
 //! > depth or color type of the image.
 
-use std::iter::Filter;
-
 use super::*;
 
 pub fn reconstruct_in_place(temp_memory: &mut [u8], header: PngHeader) -> PngResult<()> {
@@ -66,7 +64,7 @@ pub fn reconstruct_in_place(temp_memory: &mut [u8], header: PngHeader) -> PngRes
             // when there's a previous line we use it, but in this case we can't
             // skip the first pixel so we set the a_bytes in a kinda funny way.
             let mut a_bytes = &[0; 16][..filter_chunk_size];
-            let mut pixel_line_iter = pixel_line_data
+            let pixel_line_iter = pixel_line_data
               .chunks_exact_mut(filter_chunk_size)
               .zip(previous_pixel_line_data.chunks_exact(filter_chunk_size));
             pixel_line_iter.for_each(|(x_bytes, b_bytes)| {
@@ -97,7 +95,7 @@ pub fn reconstruct_in_place(temp_memory: &mut [u8], header: PngHeader) -> PngRes
             // funny way.
             let mut a_bytes = &[0; 16][..filter_chunk_size];
             let mut c_bytes = &[0; 16][..filter_chunk_size];
-            let mut pixel_line_iter = pixel_line_data
+            let pixel_line_iter = pixel_line_data
               .chunks_exact_mut(filter_chunk_size)
               .zip(previous_pixel_line_data.chunks_exact(filter_chunk_size));
             pixel_line_iter.for_each(|(x_bytes, b_bytes)| {

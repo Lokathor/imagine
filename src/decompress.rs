@@ -3,9 +3,6 @@ use super::*;
 mod bit_source;
 use bit_source::*;
 
-mod huff_symbol;
-use huff_symbol::*;
-
 mod tree_entry;
 use tree_entry::*;
 
@@ -52,15 +49,15 @@ fn decompress_zlib_to<'b>(
   //
   let (flg, rest) = cur_slice.split_first().ok_or(PngError::UnexpectedEndOfInput)?;
   cur_slice = rest;
-  let fcheck = 0b11111 & flg;
+  let _fcheck = 0b11111 & flg;
   let fdict = ((1 << 5) & flg) > 0;
-  let flevel = flg >> 6;
+  let _flevel = flg >> 6;
   trace!(
     "FLG: |{flg:08b}| fcheck: {fcheck}, fdict: {fdict}, flevel: {flevel}",
     flg = flg,
-    fcheck = fcheck,
+    fcheck = _fcheck,
     fdict = fdict,
-    flevel = flevel
+    flevel = _flevel
   );
   let fcheck_pass = u16::from_be_bytes([*cmf, *flg]) % 31 == 0;
   trace!("fcheck is correct: {}", fcheck_pass);
@@ -76,6 +73,7 @@ fn decompress_zlib_to<'b>(
 }
 
 /// Return: the number of bytes written
+#[allow(unused_labels)]
 fn decompress_deflate_to<'b, I: Iterator<Item = &'b [u8]>>(
   out: &mut [u8], bit_src: &mut BitSource<'b, I>,
 ) -> PngResult<usize> {
@@ -116,7 +114,7 @@ fn decompress_deflate_to<'b, I: Iterator<Item = &'b [u8]>>(
           return Err(PngError::UnexpectedEndOfInput);
         }
         debug_assert!(new.len() >= x.len());
-        let (mut new_head, new_tail) = new.split_at_mut(x.len());
+        let (new_head, new_tail) = new.split_at_mut(x.len());
         new_head.copy_from_slice(x);
         new = new_tail;
         len_u -= x.len();
@@ -134,7 +132,7 @@ fn decompress_deflate_to<'b, I: Iterator<Item = &'b [u8]>>(
         for i in DYNAMIC_CODE_LENGTH_ORDER.iter().copied().take(hclen as usize) {
           code_length_alphabet.tree[i].bit_count = bit_src.next_bits_lsb(3)? as u16;
         }
-        code_length_alphabet.refresh();
+        code_length_alphabet.refresh()?;
         //
         let mut litlen_alphabet = LitLenAlphabet::default();
         code_length_alphabet.fill_a_tree(
@@ -142,7 +140,7 @@ fn decompress_deflate_to<'b, I: Iterator<Item = &'b [u8]>>(
           &mut litlen_alphabet.tree,
           bit_src,
         )?;
-        litlen_alphabet.refresh();
+        litlen_alphabet.refresh()?;
         //
         let mut dist_alphabet = DistAlphabet::default();
         code_length_alphabet.fill_a_tree(
@@ -150,14 +148,14 @@ fn decompress_deflate_to<'b, I: Iterator<Item = &'b [u8]>>(
           &mut dist_alphabet.tree,
           bit_src,
         )?;
-        dist_alphabet.refresh();
+        dist_alphabet.refresh()?;
         //
         (litlen_alphabet, dist_alphabet)
       } else {
         trace!("using fixed tree data");
         let mut dist_alphabet = DistAlphabet::default();
         dist_alphabet.tree.iter_mut().for_each(|m| m.bit_count = 5);
-        dist_alphabet.refresh();
+        dist_alphabet.refresh()?;
         // FIXME: we should pre-compute the distance tree and also make that a const.
         (FIXED_HUFFMAN_TREE, dist_alphabet)
       };

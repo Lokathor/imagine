@@ -1,6 +1,7 @@
 use super::*;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Clone, Copy, PartialEq, Eq, Default)]
+#[cfg_attr(feature = "trace", derive(Debug))]
 pub(crate) struct DistAlphabet {
   pub(crate) tree: [TreeEntry; Self::COUNT],
   pub(crate) min_bit_count: u16,

@@ -53,6 +53,7 @@ impl LitLenAlphabet {
     }
   }
 }
+#[cfg(feature = "trace")]
 impl core::fmt::Debug for LitLenAlphabet {
   fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
     write!(f, "LitLenAlphabet {{ tree: {:?} }}", &self.tree[..])
