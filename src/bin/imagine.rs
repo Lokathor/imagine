@@ -19,7 +19,7 @@ fn main() {
     if let Err(e) = debug_process_a_png_file(&p, &mut temp_buffer) {
       println!("{}: {:?}", p.display(), e);
     } else {
-      println!("{}: ok!", p.display());
+      //println!("{}: ok!", p.display());
     }
   });
 }
