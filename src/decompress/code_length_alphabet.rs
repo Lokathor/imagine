@@ -53,6 +53,10 @@ impl CodeLengthAlphabet {
         key.bit_pattern <<= 1;
         key.bit_pattern |= bi.next_one_bit()? as u16;
         key.bit_count += 1;
+        trace!("key.bit_count: {}", key.bit_count);
+      }
+      if key.bit_count >= 16 {
+        return Err(PngError::CouldNotFindLitLenSymbol);
       }
     }
   }
