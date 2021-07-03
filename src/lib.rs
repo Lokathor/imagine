@@ -1,6 +1,6 @@
 #![cfg_attr(not(feature = "trace"), no_std)]
 #![forbid(unsafe_code)]
-#![warn(missing_docs)]
+//#![warn(missing_docs)]
 
 use core::{convert::TryInto, iter::Iterator};
 
@@ -36,6 +36,7 @@ pub type PngResult<T> = Result<T, PngError>;
 
 #[derive(Debug, Clone, Copy)]
 #[non_exhaustive]
+#[allow(missing_docs)]
 pub enum PngError {
   UnexpectedEndOfInput,
   NoPngSignature,
