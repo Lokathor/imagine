@@ -1,62 +1,40 @@
-#![cfg_attr(not(feature = "trace"), no_std)]
-#![forbid(unsafe_code)]
-//#![warn(missing_docs)]
+//#![no_std]
+#![allow(unused_imports)]
 
-use core::{convert::TryInto, iter::Iterator};
+#[cfg(feature = "alloc")]
+extern crate alloc;
+#[cfg(feature = "alloc")]
+use alloc::vec::Vec;
 
-#[cfg(feature = "trace")]
-extern crate std;
+#[cfg(target_pointer_width = "16")]
+compile_error!("this crate requires 32-bit or bigger pointers!");
 
-#[macro_export]
-macro_rules! trace {
-  ($($arg:tt)*) => {
-    #[cfg(feature = "trace")] {
-      ::std::print!("{file}:{line}> ", file = file!(), line = line!());
-      ::std::println!($($arg)*);
-    }
-  }
+pub mod png;
+
+pub type RGBA8 = [u8; 4];
+
+pub type ImageRGBA8 = Image<RGBA8>;
+
+pub struct Image<P> {
+  width: u32,
+  height: u32,
+  pixels: Vec<P>,
 }
 
-mod chunk;
-pub use chunk::*;
-
-mod chunk_iter;
-pub use chunk_iter::*;
-
-mod png_header;
-pub use png_header::*;
-
-mod decompress;
-pub use decompress::decompress_idat_to;
-
-mod filtering;
-pub use filtering::reconstruct_in_place;
-
-pub type PngResult<T> = Result<T, PngError>;
-
-#[derive(Debug, Clone, Copy)]
-#[non_exhaustive]
-#[allow(missing_docs)]
-pub enum PngError {
-  UnexpectedEndOfInput,
-  NoPngSignature,
-  IllegalCompressionMethod,
-  IllegalCompressionInfo,
-  IllegalFlagCheck,
-  IllegalFlagDictionary,
-  IllegalBlockType,
-  CouldNotFindLitLenSymbol,
-  CouldNotFindDistSymbol,
-  OutputOverflow,
-  BackRefToBeforeOutputStart,
-  LenAndNLenDidNotMatch,
-  BadDynamicHuffmanTreeData,
-  InterlaceNotSupported,
-  IllegalColorTypeBitDepthCombination,
-  TempMemoryWrongSizeForHeader,
-  NotAnIhdrChunk,
-  IllegalWidthZero,
-  IllegalHeightZero,
-  IllegalFilterMethod,
-  IllegalAdaptiveFilterType,
+impl<P> Image<P> {
+  #[inline]
+  #[must_use]
+  pub const fn width(&self) -> u32 {
+    self.width
+  }
+  #[inline]
+  #[must_use]
+  pub const fn height(&self) -> u32 {
+    self.height
+  }
+  #[inline]
+  #[must_use]
+  pub fn pixels(&self) -> &[P] {
+    self.pixels.as_slice()
+  }
 }

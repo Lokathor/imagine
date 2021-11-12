@@ -1,4 +1,7 @@
-use super::*;
+use super::{
+  chunk::{PngChunk, PngChunkTy},
+  PngError, PngResult,
+};
 
 #[derive(Debug, Clone, Copy)]
 pub struct PngHeader {
@@ -12,16 +15,17 @@ pub struct PngHeader {
 }
 impl PngHeader {
   pub fn from_ihdr_chunk(chunk: PngChunk<'_>) -> PngResult<Self> {
-    if chunk.chunk_type != ChunkType::IHDR || chunk.length != 13 {
+    if chunk.ty() != PngChunkTy::IHDR || chunk.data().len() != 13 {
       Err(PngError::NotAnIhdrChunk)
     } else {
-      let width = u32::from_be_bytes(chunk.chunk_data[0..4].try_into().unwrap());
-      let height = u32::from_be_bytes(chunk.chunk_data[4..8].try_into().unwrap());
-      let bit_depth = chunk.chunk_data[8];
-      let color_type = PngColorType(chunk.chunk_data[9]);
-      let compression_method = PngCompressionMethod(chunk.chunk_data[10]);
-      let filter_method = PngFilterMethod(chunk.chunk_data[11]);
-      let interlace_method = PngInterlaceMethod(chunk.chunk_data[12]);
+      let data = chunk.data();
+      let width = u32::from_be_bytes(data[0..4].try_into().unwrap());
+      let height = u32::from_be_bytes(data[4..8].try_into().unwrap());
+      let bit_depth = data[8];
+      let color_type = PngColorType(data[9]);
+      let compression_method = PngCompressionMethod(data[10]);
+      let filter_method = PngFilterMethod(data[11]);
+      let interlace_method = PngInterlaceMethod(data[12]);
       Ok(Self {
         width,
         height,
@@ -34,7 +38,10 @@ impl PngHeader {
     }
   }
 
-  pub(crate) fn get_filter_chunk_size(self) -> PngResult<usize> {
+  /// Returns the number of bytes per unfiltering chunk.
+  ///
+  /// Depending on bit depth and channel count, this can be from 1 to 8.
+  pub fn get_filtered_pixel_size(self) -> PngResult<usize> {
     Ok(match self.color_type {
       PngColorType::Y if [1, 2, 4, 8, 16].contains(&self.bit_depth) => {
         if self.bit_depth == 16 {
@@ -69,6 +76,7 @@ impl PngHeader {
     })
   }
 
+  /// The number of bytes in each scanline of the filtered data.
   pub fn get_temp_memory_bytes_per_scanline(self) -> PngResult<usize> {
     if self.interlace_method == PngInterlaceMethod::NO_INTERLACE {
       let w = self.width as usize;
@@ -87,15 +95,15 @@ impl PngHeader {
                 w.checked_mul(self.bit_depth as usize).ok_or(PngError::OutputOverflow)?;
               (bits_per_scanline + 7) / 8
             }
-            PngColorType::RGB if [8, 16].contains(&self.bit_depth) => w
-              .checked_mul(3 * (self.bit_depth as usize / 8))
-              .ok_or(PngError::OutputOverflow)?,
-            PngColorType::YA if [8, 16].contains(&self.bit_depth) => w
-              .checked_mul(2 * (self.bit_depth as usize / 8))
-              .ok_or(PngError::OutputOverflow)?,
-            PngColorType::RGBA if [8, 16].contains(&self.bit_depth) => w
-              .checked_mul(4 * (self.bit_depth as usize / 8))
-              .ok_or(PngError::OutputOverflow)?,
+            PngColorType::RGB if [8, 16].contains(&self.bit_depth) => {
+              w.checked_mul(3 * (self.bit_depth as usize / 8)).ok_or(PngError::OutputOverflow)?
+            }
+            PngColorType::YA if [8, 16].contains(&self.bit_depth) => {
+              w.checked_mul(2 * (self.bit_depth as usize / 8)).ok_or(PngError::OutputOverflow)?
+            }
+            PngColorType::RGBA if [8, 16].contains(&self.bit_depth) => {
+              w.checked_mul(4 * (self.bit_depth as usize / 8)).ok_or(PngError::OutputOverflow)?
+            }
             _ => return Err(PngError::IllegalColorTypeBitDepthCombination),
           },
         )
