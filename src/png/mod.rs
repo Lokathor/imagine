@@ -29,27 +29,64 @@ pub fn decode_png_to_image_rgba8(png: &[u8]) -> PngResult<ImageRGBA8> {
   let it = get_png_idat(png)?;
   // It sucks that the standard library doesn't provide a way to just
   // try_allocate a zeroed byte vec in one step, but whatever.
-  let mut temp_mem: Vec<u8> = unsafe {
-    let ptr: *mut u8 = alloc_zeroed(
-      Layout::from_size_align(temp_mem_req, 1).map_err(|_| PngError::AllocationFailed)?,
-    );
-    if ptr.is_null() {
-      return Err(PngError::AllocationFailed);
-    }
-    Vec::from_raw_parts(ptr, temp_mem_req, temp_mem_req)
-  };
+  let mut temp_mem: Vec<u8> = Vec::new();
+  temp_mem.try_reserve(temp_mem_req).map_err(|_| PngError::AllocationFailed)?;
   decompress_idat_to_temp_storage(&mut temp_mem, it)?;
   let final_pixel_count = (header.width * header.height) as usize;
-  let mut final_mem: Vec<RGBA8> = unsafe {
-    let ptr: *mut RGBA8 = alloc_zeroed(
-      Layout::from_size_align(final_pixel_count * 4, 1).map_err(|_| PngError::AllocationFailed)?,
-    )
-    .cast();
-    if ptr.is_null() {
-      return Err(PngError::AllocationFailed);
-    }
-    Vec::from_raw_parts(ptr, final_pixel_count, final_pixel_count)
-  };
+  let mut final_mem: Vec<RGBA8> = Vec::new();
+  final_mem.try_reserve(final_pixel_count).map_err(|_| PngError::AllocationFailed)?;
+  let fline_len = header.get_temp_memory_bytes_per_filterline()?;
+  // TODO: get palette data
+  // TODO: get transparency data
+  if header.interlace_method == PngInterlaceMethod::NO_INTERLACE {
+    match (header.color_type, header.bit_depth) {
+      (PngColorType::Y, 1) => {
+        let line_iter = temp_mem.chunks_exact_mut(fline_len).map(|line| {
+          let (f, bytes) = line.split_at_mut(1);
+          (f[0], bytemuck::cast_slice_mut::<u8, [u8; 1]>(bytes))
+        });
+        unfilter_image(line_iter, |[y8]| {
+          let mut i = 0b10000000;
+          while i > 0 {
+            let rgba8 = if y8 & i != 0 { [255, 255, 255, 255] } else { [0, 0, 0, 0] };
+            final_mem.push(rgba8);
+            i >>= 1;
+          }
+        })
+      }
+      (PngColorType::Y, 2) => {
+        let line_iter = temp_mem.chunks_exact_mut(fline_len).map(|line| {
+          let (f, bytes) = line.split_at_mut(1);
+          (f[0], bytemuck::cast_slice_mut::<u8, [u8; 1]>(bytes))
+        });
+        unfilter_image(line_iter, |[y4]| {
+          let mut i = 0b11000000;
+          while i > 0 {
+            let y = (y4 & i) * 0b01010101;
+            let rgba8 = [y, y, y, 255];
+            final_mem.push(rgba8);
+            i >>= 1;
+          }
+        })
+      }
+      (PngColorType::Y, 4) => todo!(),
+      (PngColorType::Y, 8) => todo!(),
+      (PngColorType::Y, 16) => todo!(),
+      (PngColorType::RGB, 8) => todo!(),
+      (PngColorType::RGB, 16) => todo!(),
+      (PngColorType::INDEX, 1) => todo!(),
+      (PngColorType::INDEX, 2) => todo!(),
+      (PngColorType::INDEX, 4) => todo!(),
+      (PngColorType::INDEX, 8) => todo!(),
+      (PngColorType::YA, 8) => todo!(),
+      (PngColorType::YA, 16) => todo!(),
+      (PngColorType::RGBA, 8) => todo!(),
+      (PngColorType::RGBA, 16) => todo!(),
+      _ => return Err(PngError::IllegalColorTypeBitDepthCombination),
+    };
+  } else {
+    return Err(PngError::InterlaceNotSupported);
+  }
   todo!("unfilter the bytes");
   Ok(Image { width: header.width, height: header.height, pixels: final_mem })
 }

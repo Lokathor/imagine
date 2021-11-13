@@ -6,6 +6,7 @@ edition = "2021"
 license = "Zlib OR Apache-2.0 OR MIT"
 
 [dependencies]
+bytemuck = "1"
 miniz_oxide = "0.5"
 
 [features]
