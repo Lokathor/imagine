@@ -177,9 +177,9 @@ const fn paeth_predict(a: u8, b: u8, c: u8) -> u8 {
 /// In this case, you should still use a `BPP` of 1, and each time `op` is
 /// called you'll get a single byte of output that contains 2, 4, or 8 pixels
 /// worth of output data (depending on pixel format). Note that if the number of
-/// pixels in a line isn't an even multiple of 8 then the last byte passed to
-/// `op` for a given line will have additional zeroed bits on the end (this must
-/// be tracked by the caller).
+/// pixels in a line isn't an even multiple of the number of packed pixels per
+/// byte then the last byte passed to `op` for a given line will have additional
+/// zeroed bits on the end. This must be tracked by the caller.
 ///
 /// The function assumes that all lines in the iterator will be the same length.
 /// This is trivially true for non-interlaced images, but for interlaced images
