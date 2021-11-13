@@ -162,12 +162,31 @@ const fn paeth_predict(a: u8, b: u8, c: u8) -> u8 {
   }
 }
 
-/// Given an iterator over the filter bytes and filter lines of an image,
-/// unfilters in place.
+/// Given an iterator over the filtered data of an image, unfilters all of the
+/// data in place.
 ///
 /// As each pixel is unfiltered it's also passed back out to the caller via
 /// `op`. This allows you to place the pixel into its final memory while the
 /// unfiltering is happening, instead of traversing the memory twice.
+///
+/// Filtering and Unfiltering are byte-wise operations on the pixels, so the
+/// exact channel layout of each pixel does not matter. Only the bytes-per-pixel
+/// (`BPP`) needs to be correct for unfiltering to take place.
+///
+/// Some channel and bit depth combinations will use less than 1 byte per pixel.
+/// In this case, you should still use a `BPP` of 1, and each time `op` is
+/// called you'll get a single byte of output that contains 2, 4, or 8 pixels
+/// worth of output data (depending on pixel format). Note that if the number of
+/// pixels in a line isn't an even multiple of 8 then the last byte passed to
+/// `op` for a given line will have additional zeroed bits on the end (this must
+/// be tracked by the caller).
+///
+/// The function assumes that all lines in the iterator will be the same length.
+/// This is trivially true for non-interlaced images, but for interlaced images
+/// you'll have to call the function once for each reduced image. However, the
+/// `op` to place the data for each reduced image into the final memory is
+/// already different for each reduced image, so in practice you already had to
+/// call this once for each reduced image.
 pub fn unfilter_image<'b, I, F, const BPP: usize>(mut line_iter: I, mut op: F)
 where
   I: Iterator<Item = (u8, &'b mut [[u8; BPP]])>,
