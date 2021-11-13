@@ -50,7 +50,7 @@ pub fn decode_png_to_image_rgba8(png: &[u8]) -> PngResult<ImageRGBA8> {
     }
     Vec::from_raw_parts(ptr, final_pixel_count, final_pixel_count)
   };
-  unfilter_bytes_to_rgba8(&mut final_mem, &temp_mem, header, png)?;
+  todo!("unfilter the bytes");
   Ok(Image { width: header.width, height: header.height, pixels: final_mem })
 }
 
@@ -78,6 +78,7 @@ pub enum PngError {
   IllegalHeightZero,
   OutputOverflow,
   FilteredBytesLengthMismatch,
+  OutBufferLengthMismatch,
 }
 pub type PngResult<T> = Result<T, PngError>;
 
@@ -144,17 +145,10 @@ pub fn decompress_idat_to_temp_storage<'out, 'inp>(
   Ok(())
 }
 
-/// Unfilters bytes (of any pixel format) into RGBA8 pixels.
-pub fn unfilter_bytes_to_rgba8<'out, 'inp>(
-  out: &mut [RGBA8], filtered_bytes: &'inp [u8], header: PngHeader, png: &[u8],
-) -> PngResult<()> {
-  if header.interlace_method != PngInterlaceMethod::NO_INTERLACE {
-    return Err(PngError::InterlaceNotSupported);
-  }
-  let bytes_per_scanline = header.get_temp_memory_bytes_per_scanline()?;
-  if bytes_per_scanline.saturating_mul(header.height as usize) != filtered_bytes.len() {
-    return Err(PngError::FilteredBytesLengthMismatch);
-  }
-
+pub fn unfilter_image<'b, I, F, const X: usize>(mut line_iter: I, mut op: F)
+where
+  I: Iterator<Item = (u8, &'b mut [[u8; X]])>,
+  F: FnMut([u8; X]),
+{
   todo!()
 }

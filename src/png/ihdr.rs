@@ -76,8 +76,10 @@ impl PngHeader {
     })
   }
 
-  /// The number of bytes in each scanline of the filtered data.
-  pub fn get_temp_memory_bytes_per_scanline(self) -> PngResult<usize> {
+  /// The number of bytes in each filtered line of data.
+  ///
+  /// This is the bytes per scanline, +1 byte for the filter type.
+  pub fn get_temp_memory_bytes_per_filterline(self) -> PngResult<usize> {
     if self.interlace_method == PngInterlaceMethod::NO_INTERLACE {
       let w = self.width as usize;
       if w == 0 {
@@ -115,7 +117,7 @@ impl PngHeader {
 
   pub fn get_temp_memory_requirements(self) -> PngResult<usize> {
     if self.interlace_method == PngInterlaceMethod::NO_INTERLACE {
-      let bytes_per_scanline: usize = self.get_temp_memory_bytes_per_scanline()?;
+      let bytes_per_scanline: usize = self.get_temp_memory_bytes_per_filterline()?;
       let h = self.height as usize;
       if h == 0 {
         Err(PngError::IllegalHeightZero)
