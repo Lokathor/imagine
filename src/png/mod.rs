@@ -145,10 +145,145 @@ pub fn decompress_idat_to_temp_storage<'out, 'inp>(
   Ok(())
 }
 
-pub fn unfilter_image<'b, I, F, const X: usize>(mut line_iter: I, mut op: F)
+const fn paeth_predict(a: u8, b: u8, c: u8) -> u8 {
+  let a_ = a as i32;
+  let b_ = b as i32;
+  let c_ = c as i32;
+  let p: i32 = a_ + b_ - c_;
+  let pa = (p - a_).abs();
+  let pb = (p - b_).abs();
+  let pc = (p - c_).abs();
+  if pa <= pb && pa <= pc {
+    a
+  } else if pb <= pc {
+    b
+  } else {
+    c
+  }
+}
+
+/// Given an iterator over the filter bytes and filter lines of an image,
+/// unfilters in place.
+///
+/// As each pixel is unfiltered it's also passed back out to the caller via
+/// `op`. This allows you to place the pixel into its final memory while the
+/// unfiltering is happening, instead of traversing the memory twice.
+pub fn unfilter_image<'b, I, F, const BPP: usize>(mut line_iter: I, mut op: F)
 where
-  I: Iterator<Item = (u8, &'b mut [[u8; X]])>,
-  F: FnMut([u8; X]),
+  I: Iterator<Item = (u8, &'b mut [[u8; BPP]])>,
+  F: FnMut([u8; BPP]),
 {
-  todo!()
+  let mut b_line = if let Some((f, x_line)) = line_iter.next() {
+    match f {
+      1 => {
+        // "sub"
+        let mut x_line_iter = x_line.iter_mut();
+        let mut a = if let Some(a) = x_line_iter.next() { a } else { return };
+        while let Some(x) = x_line_iter.next() {
+          for (x_byte, a_byte) in x.iter_mut().zip(a.iter()) {
+            *x_byte = x_byte.wrapping_add(*a_byte);
+          }
+          op(*x);
+          a = x;
+        }
+      }
+      2 => (/* Up filter has no effect on the first line */),
+      3 => {
+        // "average"
+        let mut x_line_iter = x_line.iter_mut();
+        let mut a = if let Some(a) = x_line_iter.next() { a } else { return };
+        while let Some(x) = x_line_iter.next() {
+          for (x_byte, a_byte) in x.iter_mut().zip(a.iter()) {
+            *x_byte = x_byte.wrapping_add(a_byte >> 1);
+          }
+          op(*x);
+          a = x;
+        }
+      }
+      4 => {
+        // "paeth"
+        let mut x_line_iter = x_line.iter_mut();
+        let mut a = if let Some(a) = x_line_iter.next() { a } else { return };
+        while let Some(x) = x_line_iter.next() {
+          for (x_byte, a_byte) in x.iter_mut().zip(a.iter()) {
+            *x_byte = x_byte.wrapping_add(paeth_predict(*a_byte, 0, 0));
+          }
+          op(*x);
+          a = x;
+        }
+      }
+      _ => (),
+    }
+    x_line
+  } else {
+    return;
+  };
+  //
+  while let Some((f, x_line)) = line_iter.next() {
+    match f {
+      1 => {
+        // "sub"
+        let mut x_line_iter = x_line.iter_mut();
+        let mut a = if let Some(a) = x_line_iter.next() { a } else { return };
+        while let Some(x) = x_line_iter.next() {
+          for (x_byte, a_byte) in x.iter_mut().zip(a.iter()) {
+            *x_byte = x_byte.wrapping_add(*a_byte);
+          }
+          op(*x);
+          a = x;
+        }
+      }
+      2 => {
+        for (x, b) in x_line.iter_mut().zip(b_line.iter()) {
+          for (x_byte, b_byte) in x.iter_mut().zip(b.iter()) {
+            *x_byte = x_byte.wrapping_add(*b_byte);
+          }
+        }
+      }
+      3 => {
+        // "average"
+        let mut xb_line_iter = x_line.iter_mut().zip(b_line.iter());
+        let mut a = if let Some((x, b)) = xb_line_iter.next() {
+          for (x_byte, b_byte) in x.iter_mut().zip(b.iter()) {
+            *x_byte = x_byte.wrapping_add(b_byte >> 1);
+          }
+          x
+        } else {
+          return;
+        };
+        while let Some((x, b)) = xb_line_iter.next() {
+          for ((x_byte, a_byte), b_byte) in x.iter_mut().zip(a.iter()).zip(b.iter()) {
+            *x_byte = x_byte.wrapping_add(((*a_byte as u32 + *b_byte as u32) >> 1) as u8);
+          }
+          op(*x);
+          a = x;
+        }
+      }
+      4 => {
+        // "paeth"
+        let mut xb_line_iter = x_line.iter_mut().zip(b_line.iter());
+        let (mut a, mut c) = if let Some((x, b)) = xb_line_iter.next() {
+          for (x_byte, b_byte) in x.iter_mut().zip(b.iter()) {
+            *x_byte = x_byte.wrapping_add(paeth_predict(0, *b_byte, 0));
+          }
+          (x, b)
+        } else {
+          return;
+        };
+        while let Some((x, b)) = xb_line_iter.next() {
+          for (((x_byte, a_byte), b_byte), c_byte) in
+            x.iter_mut().zip(a.iter()).zip(b.iter()).zip(c.iter())
+          {
+            *x_byte = x_byte.wrapping_add(paeth_predict(*a_byte, *b_byte, *c_byte));
+          }
+          op(*x);
+          a = x;
+          c = b;
+        }
+      }
+      _ => (),
+    }
+    //
+    b_line = x_line;
+  }
 }
