@@ -1,3 +1,48 @@
+//! Module for pixel formats.
+//!
+//! There's two main factors with a pixel format:
+//! * **Channels:** generally one or more of red, green, blue, and alpha. Some
+//!   formats only use gray, marked as "Y" in format names. Other channel
+//!   combinations also exist.
+//! * **Bit Depth:** how many bits per channel. All current formats have
+//!   identical bit depth for all channels, but formats do exist with different
+//!   depths per channel.
+//!
+//! When the bit depth and channel layout allows, multiple pixels can be packed
+//! within a single byte.
+//!
+//! **Note:** All of the current formats are what's required for PNG support.
+//! Other formats might be added in the future as more image formats are added.
+//!
+//! ## Format Conversion
+//!
+//! Since pixel formats have two main factors (channels and depth), there's two
+//! ways that you might change data between pixel formats.
+//!
+//! ### Between Gray and RGB
+//! When going between grayscale and RGB coloring, the simple method is to use
+//! an even split (to RGB) or an average (to Gray).
+//!
+//! However, human eyes don't respond equally to all three colors. To account
+//! for this, you can weight the value of each channel.
+//! ```
+//! Y = 0.299 * R + 0.587 * G + 0.114 * B
+//! ```
+//!
+//! ### Between Bit Depths
+//! All current formats have channel values stored only as integer values. Even
+//! so, there's more than one way to convert between bit depths.
+//!
+//! * If sticking with integers: to *reduce* bit depth just keep the top X many
+//!   bits, and to *increase* bit depth you should use the current bit pattern
+//!   as the top X many bits, and then copy that bit pattern down however many
+//!   times is required to fill in all newly added bits.
+//! * Alternately, you can use floats: in this case, increaseing or decreasing
+//!   the bit depth uses the same system. Convert the integer value to a float
+//!   and divide by the maximum value of the starting bit depth (giving a
+//!   normalized value), then multiply by the maximum of the target bit depth,
+//!   and convert back to an integer.
+
 use bytemuck::{Pod, Zeroable};
 
 /// Eight 1-bit greyscale pixels, tightly packed.

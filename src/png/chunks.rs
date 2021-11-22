@@ -9,12 +9,18 @@ use super::*;
 /// The first eight bytes of a PNG datastream should match these bytes.
 pub const PNG_SIGNATURE: [u8; 8] = [137, 80, 78, 71, 13, 10, 26, 10];
 
+/// Errors that can happen when trying to process a PNG.
 #[derive(Debug, Clone, Copy)]
 pub enum PngError {
   //
 }
 
+/// Enum for a fully parsed PNG chunk.
+///
+/// When you have a [`RawPngChunk`], use `PngChunk::try_from` to attempt to
+/// convert it into this form.
 #[derive(Debug, Clone, Copy)]
+#[allow(missing_docs)]
 pub enum PngChunk<'b> {
   IHDR(IHDR),
   PLTE(PLTE<'b>),
@@ -37,6 +43,7 @@ pub enum PngChunk<'b> {
 }
 impl<'b> TryFrom<RawPngChunk<'b>> for PngChunk<'b> {
   type Error = ();
+  #[must_use]
   fn try_from(
     RawPngChunk { chunk_ty, data, declared_crc: _ }: RawPngChunk<'b>,
   ) -> Result<Self, Self::Error> {
@@ -233,6 +240,7 @@ impl<'b> TryFrom<RawPngChunk<'b>> for PngChunk<'b> {
 ///   only 1, 2, or 4 bits each. In this case, the pixels are tightly packed
 ///   into bytes, with the left-most pixel being the highest bits of the byte.
 #[derive(Debug, Clone, Copy)]
+#[allow(missing_docs)]
 pub enum PngPixelFormat {
   Y1,
   Y2,
@@ -251,6 +259,10 @@ pub enum PngPixelFormat {
   RGBA16,
 }
 impl PngPixelFormat {
+  /// Given an image's *pixel* width, calculates the *bytes* for a full scanline
+  /// in this format.
+  #[inline]
+  #[must_use]
   pub const fn bytes_per_scanline(self, width: u32) -> usize {
     let width = width as usize;
     match self {
@@ -269,32 +281,45 @@ impl PngPixelFormat {
   }
 }
 
-/// `IHDR`: Image header
+/// `IHDR`: Image header.
 #[derive(Debug, Clone, Copy)]
 pub struct IHDR {
+  /// Width in pixels.
+  ///
+  /// Shouldn't be less than 1 or more than `i32::MAX`.
   pub width: u32,
+
+  /// Height in pixels.
+  ///
+  /// Shouldn't be less than 1 or more than `i32::MAX`.
   pub height: u32,
+
+  /// Format of the pixels.
   pub pixel_format: PngPixelFormat,
+
+  /// If the pixel data is interlaced or not.
   pub is_interlaced: bool,
 }
 
-/// `PLTE`: Palette
+/// `PLTE`: Palette.
 #[derive(Debug, Clone, Copy)]
+#[allow(missing_docs)]
 pub struct PLTE<'b> {
   pub data: &'b [RGB8],
 }
 
-/// `IDAT`: Image data
+/// `IDAT`: Image data.
 #[derive(Debug, Clone, Copy)]
+#[allow(missing_docs)]
 pub struct IDAT<'b> {
   pub data: &'b [u8],
 }
 
-/// `IEND`: Image trailer
+/// `IEND`: Image trailer.
 #[derive(Debug, Clone, Copy)]
 pub struct IEND;
 
-/// `tRNS`: Transparency
+/// `tRNS`: Transparency.
 ///
 /// Stores additional transparency data.
 ///
@@ -311,18 +336,30 @@ pub struct IEND;
 /// the image is indexed color and you see a `tRNS` chunk with the `Y` or `RGB`
 /// variants that was *supposed* to be a slice of `Index` transparency info.
 #[derive(Debug, Clone, Copy)]
+#[allow(missing_docs)]
 pub enum tRNS<'b> {
   Y { y: u16 },
   RGB { r: u16, g: u16, b: u16 },
   Index { data: &'b [u8] },
 }
 impl<'b> tRNS<'b> {
+  /// Convert a `tRNS::Y` back to the index bytes.
+  ///
+  /// Gives `None` if this isn't the `Y` variant.
+  #[inline]
+  #[must_use]
   pub const fn y_to_index(self) -> Option<[u8; 2]> {
     match self {
       Self::Y { y } => Some(y.to_be_bytes()),
       _ => None,
     }
   }
+
+  /// Convert a `tRNS::RGB` back to the index bytes.
+  ///
+  /// Gives `None` if this isn't the `RGB` variant.
+  #[inline]
+  #[must_use]
   pub const fn rgb_to_index(self) -> Option<[u8; 6]> {
     match self {
       Self::RGB { r, g, b } => {
@@ -336,7 +373,7 @@ impl<'b> tRNS<'b> {
   }
 }
 
-/// `cHRM`: Primary chromaticities and white point
+/// `cHRM`: Primary chromaticities and white point.
 ///
 /// Stores chromacity data.
 ///
@@ -347,6 +384,7 @@ impl<'b> tRNS<'b> {
 /// An `sRGB` chunk or `iCCP` chunk, when present and recognized, overrides the
 /// `cHRM` chunk.
 #[derive(Debug, Clone, Copy)]
+#[allow(missing_docs)]
 pub struct cHRM {
   pub white_x: u32,
   pub white_y: u32,
@@ -358,7 +396,7 @@ pub struct cHRM {
   pub blue_y: u32,
 }
 
-/// `gAMA`: Image gamma
+/// `gAMA`: Image gamma.
 ///
 /// Stores gamma data.
 ///
@@ -369,14 +407,16 @@ pub struct cHRM {
 /// An `sRGB` chunk or `iCCP` chunk, when present and recognized, overrides the
 /// `gAMA` chunk.
 #[derive(Debug, Clone, Copy)]
+#[allow(missing_docs)]
 pub struct gAMA {
   pub gamma: u32,
 }
 
-/// `iCCP`: Embedded ICC profile
+/// `iCCP`: Embedded ICC profile.
 ///
 /// * The profile `name` may be any convenient name for referring to the
-///   profile. It is case-sensitive.
+///   profile. It is case-sensitive. It is expected to contain Latin-1 text
+///   without any null bytes.
 /// * The `data` is a zlib data stream, and decompression of this datastream
 ///   yields the embedded ICC profile.
 /// * If ICC profiles are supported by the decoder then use of this chunk (or
@@ -384,13 +424,13 @@ pub struct gAMA {
 ///
 /// If this chunk is present, then the `sRGB` chunk *should not* be present.
 #[derive(Debug, Clone, Copy)]
+#[allow(missing_docs)]
 pub struct iCCP<'b> {
-  /// Should contain Latin-1 text.
   pub name: &'b [u8],
   pub zlib_data: &'b [u8],
 }
 
-/// `sBIT`: Significant bits
+/// `sBIT`: Significant bits.
 ///
 /// Gives the original number of significant bits per channel in the image.
 ///
@@ -401,6 +441,7 @@ pub struct iCCP<'b> {
 /// * If the color type doesn't have alpha but a `tRNS` chunk is present then
 ///   all alpha bits are assumed to be significant.
 #[derive(Debug, Clone, Copy)]
+#[allow(missing_docs)]
 pub enum sBIT {
   Y { y: u8 },
   RGB { r: u8, g: u8, b: u8 },
@@ -408,7 +449,9 @@ pub enum sBIT {
   RGBA { r: u8, g: u8, b: u8, a: u8 },
 }
 
+/// Used by [`sRGB`] chunks.
 #[derive(Debug, Clone, Copy)]
+#[allow(missing_docs)]
 pub enum PngSrgbIntent {
   /// for images preferring good adaptation to the output device gamut at the
   /// expense of colorimetric accuracy, such as photographs.
@@ -424,7 +467,7 @@ pub enum PngSrgbIntent {
   AbsoluteColorimetric = 4,
 }
 
-/// `sRGB`: Standard RGB colour space
+/// `sRGB`: Standard RGB colour space.
 ///
 /// If the `sRGB` chunk is present, the image samples conform to the
 /// [sRGB](https://en.wikipedia.org/wiki/SRGB) colour space.
@@ -434,27 +477,31 @@ pub enum PngSrgbIntent {
 ///
 /// If `sRGB` is present it overrides any `gAMA` and/or `cHRM`.
 #[derive(Debug, Clone, Copy)]
+#[allow(missing_docs)]
 pub struct sRGB {
   pub intent: PngSrgbIntent,
 }
 
-/// `tEXt`: Textual data
+/// `tEXt`: Textual data.
 #[derive(Debug, Clone, Copy)]
+#[allow(missing_docs)]
 pub struct tEXt<'b> {
   pub keyword: &'b [u8],
   /// Should contain Latin-1 text.
   pub text: &'b [u8],
 }
 
-/// `zTXt`: Compressed textual data
+/// `zTXt`: Compressed textual data.
 #[derive(Debug, Clone, Copy)]
+#[allow(missing_docs)]
 pub struct zTXt<'b> {
   pub keyword: &'b [u8],
   pub zlib_data: &'b [u8],
 }
 
-/// `iTXt`: International textual data
+/// `iTXt`: International textual data.
 #[derive(Debug, Clone, Copy)]
+#[allow(missing_docs)]
 pub struct iTXt<'b> {
   pub keyword: &'b [u8],
   pub text_is_compressed: bool,
@@ -466,20 +513,21 @@ pub struct iTXt<'b> {
   pub text: &'b [u8],
 }
 
-/// `bKGD`: Background colour
+/// `bKGD`: Background colour.
 ///
 /// Gives an intended background color for the image.
 ///
-/// The color type should match the color type of the image, with an implied
-/// alpha value of "fully opaque" (eg: 255 for 8-bit alpha).
+/// The color type should match the color type of the image. The implied alpha
+/// value is always "fully opaque" (eg: 255 for 8-bit alpha).
 #[derive(Debug, Clone, Copy)]
+#[allow(missing_docs)]
 pub enum bKGD {
   Y { y: u16 },
   RGB { r: u16, g: u16, b: u16 },
   Index { i: u8 },
 }
 
-/// `hIST`: Image Histogram
+/// `hIST`: Image Histogram.
 ///
 /// Gives the approximate usage frequency of each color in the palette.
 ///
@@ -499,17 +547,19 @@ pub enum bKGD {
 /// given as a slice to avoid allocation, because the data length is dynamic
 /// (the length should match the length of the palette).
 #[derive(Debug, Clone, Copy)]
+#[allow(missing_docs)]
 pub struct hIST<'b> {
   pub data: &'b [[u8; 2]],
 }
 
-/// `pHYs`: Physical pixel dimensions
+/// `pHYs`: Physical pixel dimensions.
 ///
 /// Specifies the intended pixel size or aspect ratio for display of the image.
 ///
 /// When `is_meters` is set then `x` and `y` are in pixels per meter.
 /// Otherwise they have no unit and define an aspect ratio only.
 #[derive(Debug, Clone, Copy)]
+#[allow(missing_docs)]
 pub struct pHYs {
   pub ppu_x: u32,
   pub ppu_y: u32,
@@ -518,6 +568,7 @@ pub struct pHYs {
 
 /// `sPLT`: Suggested palette data.
 #[derive(Debug, Clone, Copy)]
+#[allow(missing_docs)]
 pub struct sPLT<'b> {
   pub palette_name: &'b [u8],
   pub is_16bit: bool,
@@ -543,13 +594,22 @@ pub struct tIME {
   pub second: u8,
 }
 
+/// A raw portion of a PNG datastream.
+///
+/// The header for a chunk gives its type and data length. After the data
+/// there's a CRC for the chunk. This type captures that info, without
+/// attempting to examine if the data portion fits with the chunk type.
+///
+/// Generally you'll convert this into a [`PngChunk`] using `try_from`.
 #[derive(Debug, Clone, Copy)]
+#[allow(missing_docs)]
 pub struct RawPngChunk<'b> {
   pub chunk_ty: [u8; 4],
   pub data: &'b [u8],
   pub declared_crc: u32,
 }
 
+/// An iterator over the raw chunks of a PNG.
 #[derive(Clone)]
 pub struct RawPngChunkIter<'b> {
   spare: &'b [u8],
@@ -561,6 +621,8 @@ impl<'b> RawPngChunkIter<'b> {
   /// This function always returns an iterator. However, if the slice doesn't
   /// start with the correct PNG signature then an empty slice will be store,
   /// and the first call to `next` will end up returning `None`.
+  #[inline]
+  #[must_use]
   pub const fn new(png: &'b [u8]) -> Self {
     Self {
       spare: match png {
