@@ -10,9 +10,61 @@ use super::*;
 pub const PNG_SIGNATURE: [u8; 8] = [137, 80, 78, 71, 13, 10, 26, 10];
 
 /// Errors that can happen when trying to process a PNG.
-#[derive(Debug, Clone, Copy)]
+///
+/// Many of these don't actually prevent all progress with parsing. Usually only
+/// a particular chunk is unusable, and you can just ignore that chunk and
+/// proceed. The [`is_critical`](PngError::is_critical) method is a quick way to
+/// separate the critical errors from non-critical errors.
+///
+/// Many errors are just "Illegal_Foo", for various chunk types Foo. The precise
+/// details of what's wrong inside of a chunk's data aren't usually that
+/// interesting. If you want more fine grained results in this area I'm happy to
+/// accept a PR about it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[non_exhaustive]
 pub enum PngError {
-  //
+  /// If the header isn't the first chunk you're pretty boned because you don't
+  /// know the image's dimensions or pixel format.
+  FirstChunkNotIHDR,
+  Illegal_IHDR,
+  Illegal_PLTE,
+  /// Though the `IEND` is a "critical chunk", this is not considered a critical
+  /// error, because you've already processed all the data at this point.
+  Illegal_IEND,
+  Illegal_cHRM,
+  Illegal_gAMA,
+  Illegal_iCCP,
+  Illegal_sBIT,
+  Illegal_sRGB,
+  Illegal_tEXt,
+  Illegal_zTXt,
+  Illegal_iTXt,
+  Illegal_bKGD,
+  Illegal_hIST,
+  Illegal_pHYs,
+  Illegal_sPLT,
+  Illegal_tIME,
+  UnknownChunkType,
+  NoChunksPresent,
+}
+impl PngError {
+  pub fn is_critical(self) -> bool {
+    use PngError::*;
+    match self {
+      FirstChunkNotIHDR | Illegal_IHDR | Illegal_PLTE => true,
+      _ => false,
+    }
+  }
+}
+
+/// Used as a [`filter`](Iterator::filter) over chunk parsing results so that
+/// non-critical errors are filtered away.
+pub fn critical_errors_only(r: &Result<PngChunk, PngError>) -> bool {
+  match r {
+    Ok(_) => true,
+    Err(e) if e.is_critical() => true,
+    _ => false,
+  }
 }
 
 /// Enum for a fully parsed PNG chunk.
@@ -41,16 +93,25 @@ pub enum PngChunk<'b> {
   sPLT(sPLT<'b>),
   tIME(tIME),
 }
+impl<'b> PngChunk<'b> {
+  pub fn to_ihdr(self) -> Option<IHDR> {
+    match self {
+      Self::IHDR(ihdr) => Some(ihdr),
+      _ => None,
+    }
+  }
+}
 impl<'b> TryFrom<RawPngChunk<'b>> for PngChunk<'b> {
-  type Error = ();
+  type Error = PngError;
   #[must_use]
   fn try_from(
     RawPngChunk { chunk_ty, data, declared_crc: _ }: RawPngChunk<'b>,
   ) -> Result<Self, Self::Error> {
+    use PngError::*;
     Ok(match &chunk_ty {
       b"IHDR" => {
         if data.len() != 13 || data[10] != 0 || data[11] != 0 || data[12] > 1 {
-          return Err(());
+          return Err(Illegal_IHDR);
         }
         PngChunk::IHDR(IHDR {
           width: u32::from_be_bytes(data[0..4].try_into().unwrap()),
@@ -71,21 +132,21 @@ impl<'b> TryFrom<RawPngChunk<'b>> for PngChunk<'b> {
             (16, 4) => PngPixelFormat::YA16,
             (8, 6) => PngPixelFormat::RGBA8,
             (16, 6) => PngPixelFormat::RGBA16,
-            _ => return Err(()),
+            _ => return Err(Illegal_IHDR),
           },
           is_interlaced: data[12] == 1,
         })
       }
       b"PLTE" => {
         if (data.len() % 3) != 0 {
-          return Err(());
+          return Err(Illegal_PLTE);
         }
         PngChunk::PLTE(PLTE { data: cast_slice(data) })
       }
       b"IDAT" => PngChunk::IDAT(IDAT { data }),
       b"IEND" => match *data {
         [] => PngChunk::IEND,
-        _ => PngChunk::tRNS(tRNS::Index { data }),
+        _ => return Err(Illegal_IEND),
       },
       b"tRNS" => match *data {
         [y0, y1] => PngChunk::tRNS(tRNS::Y { y: u16::from_be_bytes([y0, y1]) }),
@@ -98,7 +159,7 @@ impl<'b> TryFrom<RawPngChunk<'b>> for PngChunk<'b> {
       },
       b"cHRM" => {
         if data.len() != (4 * 8) {
-          return Err(());
+          return Err(Illegal_cHRM);
         }
         PngChunk::cHRM(cHRM {
           white_x: u32::from_be_bytes(data[0..4].try_into().unwrap()),
@@ -113,16 +174,16 @@ impl<'b> TryFrom<RawPngChunk<'b>> for PngChunk<'b> {
       }
       b"gAMA" => {
         if data.len() != 4 {
-          return Err(());
+          return Err(Illegal_gAMA);
         }
         PngChunk::gAMA(gAMA { gamma: u32::from_be_bytes(data.try_into().unwrap()) })
       }
       b"iCCP" => {
         let mut it = data.splitn(2, |u| u == &0_u8);
-        let name = it.next().ok_or(())?;
-        match it.next().ok_or(())? {
+        let name = it.next().ok_or(Illegal_iCCP)?;
+        match it.next().ok_or(Illegal_iCCP)? {
           [0, zlib_data @ ..] => PngChunk::iCCP(iCCP { name, zlib_data }),
-          _ => return Err(()),
+          _ => return Err(Illegal_iCCP),
         }
       }
       b"sBIT" => match *data {
@@ -130,7 +191,7 @@ impl<'b> TryFrom<RawPngChunk<'b>> for PngChunk<'b> {
         [y, a] => PngChunk::sBIT(sBIT::YA { y, a }),
         [r, g, b] => PngChunk::sBIT(sBIT::RGB { r, g, b }),
         [r, g, b, a] => PngChunk::sBIT(sBIT::RGBA { r, g, b, a }),
-        _ => return Err(()),
+        _ => return Err(Illegal_sBIT),
       },
       b"sRGB" => PngChunk::sRGB(sRGB {
         intent: match data {
@@ -138,30 +199,31 @@ impl<'b> TryFrom<RawPngChunk<'b>> for PngChunk<'b> {
           [1] => PngSrgbIntent::RelativeColorimetric,
           [2] => PngSrgbIntent::Saturation,
           [4] => PngSrgbIntent::AbsoluteColorimetric,
-          _ => return Err(()),
+          _ => return Err(Illegal_sRGB),
         },
       }),
       b"tEXt" => {
         let mut it = data.splitn(2, |u| u == &0_u8);
-        let keyword = it.next().ok_or(())?;
-        let text = it.next().ok_or(())?;
+        let keyword = it.next().ok_or(Illegal_tEXt)?;
+        let text = it.next().ok_or(Illegal_tEXt)?;
         PngChunk::tEXt(tEXt { keyword, text })
       }
       b"zTXt" => {
         let mut it = data.splitn(2, |u| u == &0_u8);
-        let keyword = it.next().ok_or(())?;
-        match it.next().ok_or(())? {
+        let keyword = it.next().ok_or(Illegal_zTXt)?;
+        match it.next().ok_or(Illegal_zTXt)? {
           [0, zlib_data @ ..] => PngChunk::zTXt(zTXt { keyword, zlib_data }),
-          _ => return Err(()),
+          _ => return Err(Illegal_zTXt),
         }
       }
       b"iTXt" => {
         let mut it = data.splitn(4, |u| u == &0_u8);
-        let keyword = it.next().ok_or(())?;
+        let keyword = it.next().ok_or(Illegal_iTXt)?;
         // flag is 0 or 1, method should always be 0
-        let flag_method_lang = it.next().ok_or(())?;
-        let translated_keyword = core::str::from_utf8(it.next().ok_or(())?).map_err(|_| ())?;
-        let text = it.next().ok_or(())?;
+        let flag_method_lang = it.next().ok_or(Illegal_iTXt)?;
+        let translated_keyword =
+          core::str::from_utf8(it.next().ok_or(Illegal_iTXt)?).map_err(|_| Illegal_iTXt)?;
+        let text = it.next().ok_or(Illegal_iTXt)?;
         match flag_method_lang {
           [0, 0, lang @ ..] => PngChunk::iTXt(iTXt {
             keyword,
@@ -177,7 +239,7 @@ impl<'b> TryFrom<RawPngChunk<'b>> for PngChunk<'b> {
             text_is_compressed: true,
             translated_keyword,
           }),
-          _ => return Err(()),
+          _ => return Err(Illegal_iTXt),
         }
       }
       b"bKGD" => match *data {
@@ -188,18 +250,18 @@ impl<'b> TryFrom<RawPngChunk<'b>> for PngChunk<'b> {
           g: u16::from_be_bytes([g0, g1]),
           b: u16::from_be_bytes([b0, b1]),
         }),
-        _ => return Err(()),
+        _ => return Err(Illegal_bKGD),
       },
       b"hIST" => {
         if (data.len() % 2) == 0 {
           PngChunk::hIST(hIST { data: cast_slice(data) })
         } else {
-          return Err(());
+          return Err(Illegal_hIST);
         }
       }
       b"pHYs" => {
         if data.len() != 9 || data[8] > 1 {
-          return Err(());
+          return Err(Illegal_pHYs);
         }
         PngChunk::pHYs(pHYs {
           ppu_x: u32::from_be_bytes(data[0..4].try_into().unwrap()),
@@ -209,11 +271,11 @@ impl<'b> TryFrom<RawPngChunk<'b>> for PngChunk<'b> {
       }
       b"sPLT" => {
         let mut it = data.splitn(2, |u| u == &0_u8);
-        let palette_name = it.next().ok_or(())?;
-        match it.next().ok_or(())? {
+        let palette_name = it.next().ok_or(Illegal_sPLT)?;
+        match it.next().ok_or(Illegal_sPLT)? {
           [8, entries @ ..] => PngChunk::sPLT(sPLT { palette_name, is_16bit: false, entries }),
           [16, entries @ ..] => PngChunk::sPLT(sPLT { palette_name, is_16bit: true, entries }),
-          _ => return Err(()),
+          _ => return Err(Illegal_sPLT),
         }
       }
       b"tIME" => match *data {
@@ -225,9 +287,9 @@ impl<'b> TryFrom<RawPngChunk<'b>> for PngChunk<'b> {
           minute,
           second,
         }),
-        _ => return Err(()),
+        _ => return Err(Illegal_tIME),
       },
-      _ => return Err(()),
+      _ => return Err(UnknownChunkType),
     })
   }
 }
@@ -261,6 +323,9 @@ pub enum PngPixelFormat {
 impl PngPixelFormat {
   /// Given an image's *pixel* width, calculates the *bytes* for a full scanline
   /// in this format.
+  ///
+  /// This doesn't include the filter byte for each line, so the temporary
+  /// memory requirements will be slightly larger.
   #[inline]
   #[must_use]
   pub const fn bytes_per_scanline(self, width: u32) -> usize {
@@ -279,6 +344,150 @@ impl PngPixelFormat {
       Self::RGBA16 => width * 4 * 2,
     }
   }
+}
+
+/// Get the temp bytes for a given image.
+///
+/// * Interlaced images will have to call this function for all 7 reduced images
+///   and then add up the values.
+/// * Non-interlaced images call this function just once for their normal
+///   dimensions.
+#[inline]
+#[must_use]
+const fn temp_bytes_for_image(width: u32, height: u32, pixel_format: PngPixelFormat) -> usize {
+  let bytes_per_scanline: usize = pixel_format.bytes_per_scanline(width);
+  let bytes_per_filterline: usize = bytes_per_scanline.saturating_add(1);
+  bytes_per_filterline.saturating_mul(height as usize)
+}
+
+/// Given the dimensions of the full image, computes the size of each reduced
+/// image.
+///
+/// The PNG interlacing scheme converts a full image to 7 reduced images, each
+/// with potentially separate dimensions. Knowing the size of each reduced image
+/// is important for the unfiltering process.
+/// Given the dimensions of the full image, computes the size of each reduced
+/// image.
+///
+/// The PNG interlacing scheme converts a full image to 7 reduced images, each
+/// with potentially separate dimensions. Knowing the size of each reduced image
+/// is important for the unfiltering process.
+#[inline]
+#[must_use]
+const fn reduced_image_dimensions(full_width: u32, full_height: u32) -> [(u32, u32); 7] {
+  // ```
+  // 1 6 4 6 2 6 4 6
+  // 7 7 7 7 7 7 7 7
+  // 5 6 5 6 5 6 5 6
+  // 7 7 7 7 7 7 7 7
+  // 3 6 4 6 3 6 4 6
+  // 7 7 7 7 7 7 7 7
+  // 5 6 5 6 5 6 5 6
+  // 7 7 7 7 7 7 7 7
+  // ```
+  let full_patterns_wide = full_width / 8;
+  let full_patterns_high = full_height / 8;
+  //
+  let partial_pattern_width = full_width % 8;
+  let partial_pattern_height = full_height % 8;
+  //
+  let first = (
+    full_patterns_wide + (partial_pattern_width + 7) / 8,
+    full_patterns_high + (partial_pattern_height + 7) / 8,
+  );
+  let second = (
+    full_patterns_wide + (partial_pattern_width + 3) / 8,
+    full_patterns_high + (partial_pattern_height + 7) / 8,
+  );
+  let third = (
+    full_patterns_wide * 2 + ((partial_pattern_width + 3) / 4),
+    full_patterns_high + ((partial_pattern_height + 3) / 8),
+  );
+  let fourth = (
+    full_patterns_wide * 2 + (partial_pattern_width + 1) / 4,
+    full_patterns_high * 2 + (partial_pattern_height + 3) / 4,
+  );
+  let fifth = (
+    full_patterns_wide * 4 + ((partial_pattern_width + 1) / 2),
+    full_patterns_high * 2 + (partial_pattern_height + 1) / 4,
+  );
+  let sixth = (
+    full_patterns_wide * 4 + partial_pattern_width / 2,
+    full_patterns_high * 4 + ((partial_pattern_height + 1) / 2),
+  );
+  let seventh = (
+    full_patterns_wide * 8 + partial_pattern_width,
+    full_patterns_high * 4 + (partial_pattern_height / 2),
+  );
+  //
+  [first, second, third, fourth, fifth, sixth, seventh]
+}
+
+#[test]
+fn test_reduced_image_dimensions() {
+  assert_eq!(reduced_image_dimensions(0, 0), [(0, 0); 7]);
+  // one
+  for (w, ex) in (1..=8).zip([1, 1, 1, 1, 1, 1, 1, 1]) {
+    assert_eq!(reduced_image_dimensions(w, 0)[0].0, ex, "failed w:{}", w);
+  }
+  for (h, ex) in (1..=8).zip([1, 1, 1, 1, 1, 1, 1, 1]) {
+    assert_eq!(reduced_image_dimensions(0, h)[0].1, ex, "failed h:{}", h);
+  }
+  // two
+  for (w, ex) in (1..=8).zip([0, 0, 0, 0, 1, 1, 1, 1]) {
+    assert_eq!(reduced_image_dimensions(w, 0)[1].0, ex, "failed w:{}", w);
+  }
+  for (h, ex) in (1..=8).zip([1, 1, 1, 1, 1, 1, 1, 1]) {
+    assert_eq!(reduced_image_dimensions(0, h)[1].1, ex, "failed h:{}", h);
+  }
+  // three
+  for (w, ex) in (1..=8).zip([1, 1, 1, 1, 2, 2, 2, 2]) {
+    assert_eq!(reduced_image_dimensions(w, 0)[2].0, ex, "failed w: {}", w);
+  }
+  for (h, ex) in (1..=8).zip([0, 0, 0, 0, 1, 1, 1, 1]) {
+    assert_eq!(reduced_image_dimensions(0, h)[2].1, ex, "failed h: {}", h);
+  }
+  // four
+  for (w, ex) in (1..=8).zip([0, 0, 1, 1, 1, 1, 2, 2]) {
+    assert_eq!(reduced_image_dimensions(w, 0)[3].0, ex, "failed w: {}", w);
+  }
+  for (h, ex) in (1..=8).zip([1, 1, 1, 1, 2, 2, 2, 2]) {
+    assert_eq!(reduced_image_dimensions(0, h)[3].1, ex, "failed h: {}", h);
+  }
+  // five
+  for (w, ex) in (1..=8).zip([1, 1, 2, 2, 3, 3, 4, 4]) {
+    assert_eq!(reduced_image_dimensions(w, 0)[4].0, ex, "failed w: {}", w);
+  }
+  for (h, ex) in (1..=8).zip([0, 0, 1, 1, 1, 1, 2, 2]) {
+    assert_eq!(reduced_image_dimensions(0, h)[4].1, ex, "failed h: {}", h);
+  }
+  // six
+  for (w, ex) in (1..=8).zip([0, 1, 1, 2, 2, 3, 3, 4]) {
+    assert_eq!(reduced_image_dimensions(w, 0)[5].0, ex, "failed w: {}", w);
+  }
+  for (h, ex) in (1..=8).zip([1, 1, 2, 2, 3, 3, 4, 4]) {
+    assert_eq!(reduced_image_dimensions(0, h)[5].1, ex, "failed h: {}", h);
+  }
+  // seven
+  for (w, ex) in (1..=8).zip([1, 2, 3, 4, 5, 6, 7, 8]) {
+    assert_eq!(reduced_image_dimensions(w, 0)[6].0, ex, "failed w: {}", w);
+  }
+  for (h, ex) in (1..=8).zip([0, 1, 1, 2, 2, 3, 3, 4]) {
+    assert_eq!(reduced_image_dimensions(0, h)[6].1, ex, "failed h: {}", h);
+  }
+  //
+  assert_eq!(
+    reduced_image_dimensions(8, 8),
+    [
+      (1, 1), // one
+      (1, 1), // two
+      (2, 1), // three
+      (2, 2), // four
+      (4, 2), // five
+      (4, 4), // six
+      (8, 4), // seven
+    ]
+  );
 }
 
 /// `IHDR`: Image header.
@@ -300,8 +509,37 @@ pub struct IHDR {
   /// If the pixel data is interlaced or not.
   pub is_interlaced: bool,
 }
+impl IHDR {
+  /// Gets the temporary memory required to decompress the `IDAT` zlib data.
+  ///
+  /// Note: **currently** this is 1 byte more than the strict minimum
+  /// requirement because of an issue with the decompression logic of the
+  /// `miniz_oxide` crate. See
+  /// [miniz_oxide#110](https://github.com/Frommi/miniz_oxide/issues/110).
+  #[inline]
+  #[must_use]
+  pub fn temp_memory_requirement(self) -> usize {
+    // TODO: remove the 1+ part when `miniz_oxide` is fixed
+    1 + if self.is_interlaced {
+      panic!("__InterlaceNotSupported");
+    } else {
+      temp_bytes_for_image(self.width, self.height, self.pixel_format)
+    }
+  }
+}
 
 /// `PLTE`: Palette.
+///
+/// * This chunk is required for indexed color PNGs, and it allows converting
+///   index values to `RGBA8` values. There should be no more entries than the
+///   bit depth of the index type, but there can be fewer entries. If an index
+///   is out of range for the palette entries that's technically an error, but
+///   probably you should use `pal.data.get(index).unwrap_or_default()` and just
+///   have any error pixels be transparent black.
+/// * This chunk is optional for RGB and RGBA color PNGs. If present with this
+///   PNG type, it represents a suggested palette for how to quantize the image
+///   if the display only supports limited colors.
+/// * This chunk should not be present in Y or YA color PNGs.
 #[derive(Debug, Clone, Copy)]
 #[allow(missing_docs)]
 pub struct PLTE<'b> {
@@ -309,6 +547,11 @@ pub struct PLTE<'b> {
 }
 
 /// `IDAT`: Image data.
+///
+/// One or more image data chunks hold a zlib data stream which should be
+/// decompressed to get the filtered images of the PNG. If there's more than one
+/// image data chunks in a PNG (the common case) then they should appear
+/// directly one after the other in the PNG data stream.
 #[derive(Debug, Clone, Copy)]
 #[allow(missing_docs)]
 pub struct IDAT<'b> {
@@ -316,6 +559,9 @@ pub struct IDAT<'b> {
 }
 
 /// `IEND`: Image trailer.
+///
+/// This should be the final chunk in a PNG, which lets you know that you have
+/// the complete PNG data stream.
 #[derive(Debug, Clone, Copy)]
 pub struct IEND;
 
@@ -334,7 +580,8 @@ pub struct IEND;
 ///
 /// **Note:** The parser will pick `Y` or `RGB` based on the data length, so if
 /// the image is indexed color and you see a `tRNS` chunk with the `Y` or `RGB`
-/// variants that was *supposed* to be a slice of `Index` transparency info.
+/// variants that was *supposed* to be a slice of `Index` transparency info. Use
+/// the `y_to_index` or `rgb_to_index` methods as appropriate.
 #[derive(Debug, Clone, Copy)]
 #[allow(missing_docs)]
 pub enum tRNS<'b> {
@@ -395,6 +642,18 @@ pub struct cHRM {
   pub blue_x: u32,
   pub blue_y: u32,
 }
+impl cHRM {
+  pub const SRGB_CHROMACITY: Self = cHRM {
+    white_x: 31_270,
+    white_y: 32_900,
+    red_x: 64_000,
+    red_y: 33_000,
+    green_x: 30_000,
+    green_y: 60_000,
+    blue_x: 15_000,
+    blue_y: 6_000,
+  };
+}
 
 /// `gAMA`: Image gamma.
 ///
@@ -410,6 +669,9 @@ pub struct cHRM {
 #[allow(missing_docs)]
 pub struct gAMA {
   pub gamma: u32,
+}
+impl gAMA {
+  pub const SRGB_GAMMA: Self = gAMA { gamma: 45_455 };
 }
 
 /// `iCCP`: Embedded ICC profile.
