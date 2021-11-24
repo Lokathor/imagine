@@ -47,10 +47,10 @@
 //! let mut it = RawPngChunkIter::new(png).map(PngChunk::try_from).filter(critical_errors_only);
 //! ```
 //!
-//! Once the iterator is ready you need to get the header data.
-//! This comes in the form of an [`IHDR`] chunk, and it should be the very first
-//! chunk you find. Assuming that you're inside of a function that returns
-//! `Result<_, PngError>` you'd use a few `?` operators and have something like
+//! Once the iterator is ready you need to get the header data. This comes in
+//! the form of an [`IHDR`] chunk, and it should be the very first chunk you
+//! find. Assuming that you're inside of a function that returns `Result<_,
+//! PngError>` you'd use a few `?` operators here and there, something like
 //! this.
 //!
 //! ```no_run
@@ -62,6 +62,43 @@
 //! # Ok(())
 //! # }
 //! ```
+//!
+//! Now you have the PNG's header information. This tells you:
+//! * The dimensions of the image
+//! * The pixel format of the image's pixels
+//! * If the decompressed data of the image is interlaced or not.
+//!
+//! When storing the PNG, the raw pixel values are first "filtered" (to try and
+//! make them more compression-friendly), and then compressed into a Zlib data
+//! stream. To decode the PNG info you have to reverse the operations. First
+//! decompressing, and then unfiltering.
+//!
+//! * **Unfiltering:** The decompressed data will be a series of lines for
+//!   images with an extra byte on the front of each line which says what filter
+//!   method was used for that line. The unfiltering can be performed in place,
+//!   but leaves the filter markers between each line of useful pixel data. Most
+//!   other code doesn't expect this layout, so you'll usually have to copy the
+//!   lines into a different buffer.
+//! * **De-interlacing:** If the image is interlaced then the data won't be
+//!   stored as a single series of filtered bytes and lines. Instead, the
+//!   overall image is stored as a series seven "reduced" images of varying
+//!   resolutions. Again, most code doesn't expect this arrangement of the data,
+//!   so you'll usually have to de-interlace the data to make it usable.
+//! * **Flipping:** The PNG format assumes that the origin pixel is the top
+//!   left, with scanlines going left to right, top to bottom. If your use of
+//!   the data doesn't have this same assumption you'll need to flip the rows
+//!   and/or columns of the pixels.
+//! * **Pixel Format Changes:** The PNG's stored pixel format might not be the
+//!   same as your desired target pixel format. Particularly, any pixel format
+//!   that packs multiple pixels within a byte is unlikely to be usable by
+//!   common code.
+//!
+//! The decompression is generally done as its own stage of work.
+//!
+//! All the other steps (unfiltering, de-interlacing, etc) can generally be
+//! combined into just one additional pass over the decompressed data that
+//! unfilters the data in place while also optionally passing out info to a
+//! callback which places unfiltered pixels into a final buffer.
 
 mod chunks;
 pub use chunks::*;

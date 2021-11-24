@@ -694,14 +694,21 @@ pub struct iCCP<'b> {
 
 /// `sBIT`: Significant bits.
 ///
-/// Gives the original number of significant bits per channel in the image.
+/// Gives the original number of significant bits per channel in the image. This
+/// is only needed if the number of significant bits in the image is less than
+/// the full bit depth of the image. For example, in an `RGB8` PNG, perhaps the
+/// original image only had 5 significant bits of color depth to it.
 ///
 /// * Each value here should be more than 0 and less than the full bit depth of
-///   this PNG.
+///   this PNG's pixel format.
 /// * Indexed color uses the `RGB` variant, and the values must be less than 8.
-/// * The variant used should match the color type of the image.
-/// * If the color type doesn't have alpha but a `tRNS` chunk is present then
-///   all alpha bits are assumed to be significant.
+/// * The variant used should match the color type of the image, possibly with
+///   alpha added or removed.
+///
+/// The `sBIT` chunk might *not* have transparency information even if the image
+/// data does (either because the color format has transparency, or because a
+/// `tRNS` chunk is specified). In this case, all bits of transparency
+/// information are assumed to have been significant.
 #[derive(Debug, Clone, Copy)]
 #[allow(missing_docs)]
 pub enum sBIT {
