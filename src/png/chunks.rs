@@ -1,71 +1,8 @@
-#![allow(non_camel_case_types)]
-
 use bytemuck::cast_slice;
 
 use crate::pixel_formats::RGB8;
 
 use super::*;
-
-/// The first eight bytes of a PNG datastream should match these bytes.
-pub const PNG_SIGNATURE: [u8; 8] = [137, 80, 78, 71, 13, 10, 26, 10];
-
-/// Errors that can happen when trying to process a PNG.
-///
-/// Many of these don't actually prevent all progress with parsing. Usually only
-/// a particular chunk is unusable, and you can just ignore that chunk and
-/// proceed. The [`is_critical`](PngError::is_critical) method is a quick way to
-/// separate the critical errors from non-critical errors.
-///
-/// Many errors are just "Illegal_Foo", for various chunk types Foo. The precise
-/// details of what's wrong inside of a chunk's data aren't usually that
-/// interesting. If you want more fine grained results in this area I'm happy to
-/// accept a PR about it.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-#[non_exhaustive]
-pub enum PngError {
-  /// If the header isn't the first chunk you're pretty boned because you don't
-  /// know the image's dimensions or pixel format.
-  FirstChunkNotIHDR,
-  Illegal_IHDR,
-  Illegal_PLTE,
-  /// Though the `IEND` is a "critical chunk", this is not considered a critical
-  /// error, because you've already processed all the data at this point.
-  Illegal_IEND,
-  Illegal_cHRM,
-  Illegal_gAMA,
-  Illegal_iCCP,
-  Illegal_sBIT,
-  Illegal_sRGB,
-  Illegal_tEXt,
-  Illegal_zTXt,
-  Illegal_iTXt,
-  Illegal_bKGD,
-  Illegal_hIST,
-  Illegal_pHYs,
-  Illegal_sPLT,
-  Illegal_tIME,
-  UnknownChunkType,
-  NoChunksPresent,
-}
-impl PngError {
-  pub fn is_critical(self) -> bool {
-    use PngError::*;
-    match self {
-      FirstChunkNotIHDR | Illegal_IHDR | Illegal_PLTE => true,
-      _ => false,
-    }
-  }
-}
-
-/// Used as a [`filter`](Iterator::filter) over chunk parsing results so that
-/// non-critical errors are filtered away.
-pub fn critical_errors_only(r: &Result<PngChunk, PngError>) -> bool {
-  match r {
-    Ok(_) => true,
-    Err(e) if e.is_critical() => true,
-    _ => false,
-  }
-}
 
 /// Enum for a fully parsed PNG chunk.
 ///
@@ -355,6 +292,9 @@ impl PngPixelFormat {
 #[inline]
 #[must_use]
 const fn temp_bytes_for_image(width: u32, height: u32, pixel_format: PngPixelFormat) -> usize {
+  if width == 0 {
+    return 0;
+  }
   let bytes_per_scanline: usize = pixel_format.bytes_per_scanline(width);
   let bytes_per_filterline: usize = bytes_per_scanline.saturating_add(1);
   bytes_per_filterline.saturating_mul(height as usize)
@@ -521,7 +461,11 @@ impl IHDR {
   pub fn temp_memory_requirement(self) -> usize {
     // TODO: remove the 1+ part when `miniz_oxide` is fixed
     1 + if self.is_interlaced {
-      panic!("__InterlaceNotSupported");
+      let mut total = 0;
+      for (width, height) in reduced_image_dimensions(self.width, self.height) {
+        total += temp_bytes_for_image(width, height, self.pixel_format);
+      }
+      total
     } else {
       temp_bytes_for_image(self.width, self.height, self.pixel_format)
     }
@@ -888,7 +832,7 @@ impl<'b> RawPngChunkIter<'b> {
   ///
   /// ## Failure
   /// This function always returns an iterator. However, if the slice doesn't
-  /// start with the correct PNG signature then an empty slice will be store,
+  /// start with the correct PNG signature then an empty slice will be stored,
   /// and the first call to `next` will end up returning `None`.
   #[inline]
   #[must_use]
