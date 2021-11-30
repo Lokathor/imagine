@@ -1,4 +1,3 @@
-
 use pixels::{Error, Pixels, SurfaceTexture};
 use winit::{
   dpi::LogicalSize,
@@ -54,10 +53,12 @@ fn parse_me_a_png_yo(png: &[u8]) -> Result<(Vec<RGBA8>, u32, u32), PngError> {
   let ihdr =
     it.next().ok_or(PngError::NoChunksPresent)??.to_ihdr().ok_or(PngError::FirstChunkNotIHDR)?;
 
+  let idat_peek = it.peekable();
   let idat_slice_it = idat_peek.filter_map(|r_chunk| match r_chunk {
     Ok(PngChunk::IDAT(IDAT { data })) => Some(data),
     _ => None,
   });
+  let mut temp_memory_buffer = vec![0; ihdr.temp_memory_requirement()];
   decompress_idat_to_temp_storage(&mut temp_memory_buffer, idat_slice_it)?;
   //
   let mut vec = Vec::new();
