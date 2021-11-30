@@ -12,5 +12,10 @@ fermium = { version = "20014", features = ["experimental_fast_build"] }
 gl33 = "0.2"
 
 [features]
-default = ["trace"]
-trace = []
+default = ["png"]
+alloc = []
+png = ["miniz_oxide"]
+
+[dev-dependencies]
+pixels = "0.8"
+winit = "0.25"
