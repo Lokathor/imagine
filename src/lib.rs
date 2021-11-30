@@ -1,62 +1,24 @@
-#![cfg_attr(not(feature = "trace"), no_std)]
-#![forbid(unsafe_code)]
+#![no_std]
 //#![warn(missing_docs)]
+#![allow(unused_imports)]
+//
+#![allow(unused)]
 
-use core::{convert::TryInto, iter::Iterator};
+//! A crate for image data decoding.
+//!
+//! Currently developing PNG support. In the future other image formats might
+//! also be added.
 
-#[cfg(feature = "trace")]
-extern crate std;
+#[cfg(feature = "alloc")]
+extern crate alloc;
+#[cfg(feature = "alloc")]
+use alloc::vec::Vec;
 
-#[macro_export]
-macro_rules! trace {
-  ($($arg:tt)*) => {
-    #[cfg(feature = "trace")] {
-      ::std::print!("{file}:{line}> ", file = file!(), line = line!());
-      ::std::println!($($arg)*);
-    }
-  }
-}
+#[cfg(target_pointer_width = "16")]
+compile_error!("this crate assumes 32-bit or bigger pointers!");
 
-mod chunk;
-pub use chunk::*;
+pub mod pixel_formats;
+pub use pixel_formats::*;
 
-mod chunk_iter;
-pub use chunk_iter::*;
-
-mod png_header;
-pub use png_header::*;
-
-mod decompress;
-pub use decompress::decompress_idat_to;
-
-mod filtering;
-pub use filtering::reconstruct_in_place;
-
-pub type PngResult<T> = Result<T, PngError>;
-
-#[derive(Debug, Clone, Copy)]
-#[non_exhaustive]
-#[allow(missing_docs)]
-pub enum PngError {
-  UnexpectedEndOfInput,
-  NoPngSignature,
-  IllegalCompressionMethod,
-  IllegalCompressionInfo,
-  IllegalFlagCheck,
-  IllegalFlagDictionary,
-  IllegalBlockType,
-  CouldNotFindLitLenSymbol,
-  CouldNotFindDistSymbol,
-  OutputOverflow,
-  BackRefToBeforeOutputStart,
-  LenAndNLenDidNotMatch,
-  BadDynamicHuffmanTreeData,
-  InterlaceNotSupported,
-  IllegalColorTypeBitDepthCombination,
-  TempMemoryWrongSizeForHeader,
-  NotAnIhdrChunk,
-  IllegalWidthZero,
-  IllegalHeightZero,
-  IllegalFilterMethod,
-  IllegalAdaptiveFilterType,
-}
+#[cfg(feature = "png")]
+pub mod png;
