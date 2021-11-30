@@ -1,6 +1,8 @@
 #![no_std]
 //#![warn(missing_docs)]
 #![allow(unused_imports)]
+//
+#![allow(unused)]
 
 //! A crate for image data decoding.
 //!

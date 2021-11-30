@@ -281,6 +281,31 @@ impl PngPixelFormat {
       Self::RGBA16 => width * 4 * 2,
     }
   }
+  #[inline]
+  #[must_use]
+  pub const fn bytes_per_pixel(self) -> usize {
+    use PngPixelFormat::*;
+    match self {
+      Y1 | Y2 | Y4 | Y8 | I1 | I2 | I4 | I8 => 1,
+      Y16 | YA8 => 2,
+      RGB8 => 3,
+      YA16 | RGBA8 => 4,
+      RGB16 => 6,
+      RGBA16 => 8,
+    }
+  }
+  #[inline]
+  #[must_use]
+  pub const fn bits_per_channel(self) -> usize {
+    use PngPixelFormat::*;
+    match self {
+      Y1 | I1 => 1,
+      Y2 | I2 => 2,
+      Y4 | I4 => 4,
+      Y8 | I8 | YA8 | RGB8 | RGBA8 => 8,
+      Y16 | RGB16 | YA16 | RGBA16 => 16,
+    }
+  }
 }
 
 /// Get the temp bytes for a given image.
@@ -300,21 +325,20 @@ const fn temp_bytes_for_image(width: u32, height: u32, pixel_format: PngPixelFor
   bytes_per_filterline.saturating_mul(height as usize)
 }
 
-/// Given the dimensions of the full image, computes the size of each reduced
-/// image.
+/// Given the dimensions of the full PNG image, computes the size of each
+/// reduced image.
 ///
 /// The PNG interlacing scheme converts a full image to 7 reduced images, each
 /// with potentially separate dimensions. Knowing the size of each reduced image
 /// is important for the unfiltering process.
-/// Given the dimensions of the full image, computes the size of each reduced
-/// image.
 ///
-/// The PNG interlacing scheme converts a full image to 7 reduced images, each
-/// with potentially separate dimensions. Knowing the size of each reduced image
-/// is important for the unfiltering process.
+/// The output uses index 0 as the base image size, and indexes 1 through 7 for
+/// the size of reduced images 1 through 7.
+///
+/// PS: Interlacing is terrible, don't interlace your images.
 #[inline]
 #[must_use]
-const fn reduced_image_dimensions(full_width: u32, full_height: u32) -> [(u32, u32); 7] {
+pub const fn reduced_image_dimensions(full_width: u32, full_height: u32) -> [(u32, u32); 8] {
   // ```
   // 1 6 4 6 2 6 4 6
   // 7 7 7 7 7 7 7 7
@@ -330,6 +354,8 @@ const fn reduced_image_dimensions(full_width: u32, full_height: u32) -> [(u32, u
   //
   let partial_pattern_width = full_width % 8;
   let partial_pattern_height = full_height % 8;
+  //
+  let zero = (full_width, full_height);
   //
   let first = (
     full_patterns_wide + (partial_pattern_width + 7) / 8,
@@ -360,65 +386,66 @@ const fn reduced_image_dimensions(full_width: u32, full_height: u32) -> [(u32, u
     full_patterns_high * 4 + (partial_pattern_height / 2),
   );
   //
-  [first, second, third, fourth, fifth, sixth, seventh]
+  [zero, first, second, third, fourth, fifth, sixth, seventh]
 }
 
 #[test]
 fn test_reduced_image_dimensions() {
-  assert_eq!(reduced_image_dimensions(0, 0), [(0, 0); 7]);
+  assert_eq!(reduced_image_dimensions(0, 0), [(0, 0); 8]);
   // one
   for (w, ex) in (1..=8).zip([1, 1, 1, 1, 1, 1, 1, 1]) {
-    assert_eq!(reduced_image_dimensions(w, 0)[0].0, ex, "failed w:{}", w);
-  }
-  for (h, ex) in (1..=8).zip([1, 1, 1, 1, 1, 1, 1, 1]) {
-    assert_eq!(reduced_image_dimensions(0, h)[0].1, ex, "failed h:{}", h);
-  }
-  // two
-  for (w, ex) in (1..=8).zip([0, 0, 0, 0, 1, 1, 1, 1]) {
     assert_eq!(reduced_image_dimensions(w, 0)[1].0, ex, "failed w:{}", w);
   }
   for (h, ex) in (1..=8).zip([1, 1, 1, 1, 1, 1, 1, 1]) {
     assert_eq!(reduced_image_dimensions(0, h)[1].1, ex, "failed h:{}", h);
   }
+  // two
+  for (w, ex) in (1..=8).zip([0, 0, 0, 0, 1, 1, 1, 1]) {
+    assert_eq!(reduced_image_dimensions(w, 0)[2].0, ex, "failed w:{}", w);
+  }
+  for (h, ex) in (1..=8).zip([1, 1, 1, 1, 1, 1, 1, 1]) {
+    assert_eq!(reduced_image_dimensions(0, h)[2].1, ex, "failed h:{}", h);
+  }
   // three
   for (w, ex) in (1..=8).zip([1, 1, 1, 1, 2, 2, 2, 2]) {
-    assert_eq!(reduced_image_dimensions(w, 0)[2].0, ex, "failed w: {}", w);
+    assert_eq!(reduced_image_dimensions(w, 0)[3].0, ex, "failed w: {}", w);
   }
   for (h, ex) in (1..=8).zip([0, 0, 0, 0, 1, 1, 1, 1]) {
-    assert_eq!(reduced_image_dimensions(0, h)[2].1, ex, "failed h: {}", h);
+    assert_eq!(reduced_image_dimensions(0, h)[3].1, ex, "failed h: {}", h);
   }
   // four
   for (w, ex) in (1..=8).zip([0, 0, 1, 1, 1, 1, 2, 2]) {
-    assert_eq!(reduced_image_dimensions(w, 0)[3].0, ex, "failed w: {}", w);
+    assert_eq!(reduced_image_dimensions(w, 0)[4].0, ex, "failed w: {}", w);
   }
   for (h, ex) in (1..=8).zip([1, 1, 1, 1, 2, 2, 2, 2]) {
-    assert_eq!(reduced_image_dimensions(0, h)[3].1, ex, "failed h: {}", h);
+    assert_eq!(reduced_image_dimensions(0, h)[4].1, ex, "failed h: {}", h);
   }
   // five
   for (w, ex) in (1..=8).zip([1, 1, 2, 2, 3, 3, 4, 4]) {
-    assert_eq!(reduced_image_dimensions(w, 0)[4].0, ex, "failed w: {}", w);
+    assert_eq!(reduced_image_dimensions(w, 0)[5].0, ex, "failed w: {}", w);
   }
   for (h, ex) in (1..=8).zip([0, 0, 1, 1, 1, 1, 2, 2]) {
-    assert_eq!(reduced_image_dimensions(0, h)[4].1, ex, "failed h: {}", h);
+    assert_eq!(reduced_image_dimensions(0, h)[5].1, ex, "failed h: {}", h);
   }
   // six
   for (w, ex) in (1..=8).zip([0, 1, 1, 2, 2, 3, 3, 4]) {
-    assert_eq!(reduced_image_dimensions(w, 0)[5].0, ex, "failed w: {}", w);
+    assert_eq!(reduced_image_dimensions(w, 0)[6].0, ex, "failed w: {}", w);
   }
   for (h, ex) in (1..=8).zip([1, 1, 2, 2, 3, 3, 4, 4]) {
-    assert_eq!(reduced_image_dimensions(0, h)[5].1, ex, "failed h: {}", h);
+    assert_eq!(reduced_image_dimensions(0, h)[6].1, ex, "failed h: {}", h);
   }
   // seven
   for (w, ex) in (1..=8).zip([1, 2, 3, 4, 5, 6, 7, 8]) {
-    assert_eq!(reduced_image_dimensions(w, 0)[6].0, ex, "failed w: {}", w);
+    assert_eq!(reduced_image_dimensions(w, 0)[7].0, ex, "failed w: {}", w);
   }
   for (h, ex) in (1..=8).zip([0, 1, 1, 2, 2, 3, 3, 4]) {
-    assert_eq!(reduced_image_dimensions(0, h)[6].1, ex, "failed h: {}", h);
+    assert_eq!(reduced_image_dimensions(0, h)[7].1, ex, "failed h: {}", h);
   }
   //
   assert_eq!(
     reduced_image_dimensions(8, 8),
     [
+      (8, 8), // zeroth
       (1, 1), // one
       (1, 1), // two
       (2, 1), // three
@@ -428,6 +455,42 @@ fn test_reduced_image_dimensions() {
       (8, 4), // seven
     ]
   );
+}
+
+/// Converts a reduced image location into the full image location.
+///
+/// For consistency between this function and the [reduced_image_dimensions]
+/// function, when giving an `image_level` of 0 the output will be the same as
+/// the input.
+///
+/// ## Panics
+/// * If the image level given exceeds 7.
+#[inline]
+#[must_use]
+pub const fn interlaced_pos_to_full_pos(
+  image_level: usize, reduced_x: u32, reduced_y: u32,
+) -> (u32, u32) {
+  // ```
+  // 1 6 4 6 2 6 4 6
+  // 7 7 7 7 7 7 7 7
+  // 5 6 5 6 5 6 5 6
+  // 7 7 7 7 7 7 7 7
+  // 3 6 4 6 3 6 4 6
+  // 7 7 7 7 7 7 7 7
+  // 5 6 5 6 5 6 5 6
+  // 7 7 7 7 7 7 7 7
+  // ```
+  match image_level {
+    0 /* full image */ => (reduced_x, reduced_y),
+    1 => (reduced_x * 8 + 0, reduced_y * 8 + 0),
+    2 => (reduced_x * 8 + 4, reduced_y * 8 + 0),
+    3 => (reduced_x * 4 + 0, reduced_y * 8 + 4),
+    4 => (reduced_x * 4 + 2, reduced_y * 4 + 0),
+    5 => (reduced_x * 2 + 0, reduced_y * 4 + 2),
+    6 => (reduced_x * 2 + 1, reduced_y * 2 + 0),
+    7 => (reduced_x * 1 + 0, reduced_y * 2 + 1),
+    _ => panic!("reduced image level must be 1 through 7")
+  }
 }
 
 /// `IHDR`: Image header.

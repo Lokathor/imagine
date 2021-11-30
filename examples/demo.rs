@@ -1,7 +1,7 @@
 use imagine::{
   png::{
-    critical_errors_only, decompress_idat_to_temp_storage, PngChunk, PngError, RawPngChunkIter,
-    IDAT,
+    critical_errors_only, decompress_idat_to_temp_storage, unfilter_decompressed_data, PngChunk,
+    PngError, RawPngChunkIter, IDAT,
   },
   RGB8, RGBA8,
 };
@@ -9,7 +9,11 @@ use imagine::{
 fn main() {
   const GLIDER_BIG_RAINBOW: &[u8] = include_bytes!("glider-big-rainbow.png");
 
-  println!("{:?}", parse_me_a_png_yo(GLIDER_BIG_RAINBOW));
+  if let Err(e) = parse_me_a_png_yo(GLIDER_BIG_RAINBOW) {
+    println!("Error: {:?}", e);
+  } else {
+    println!("Success!");
+  }
 }
 
 #[allow(unused)]
@@ -39,5 +43,13 @@ fn parse_me_a_png_yo(png: &[u8]) -> Result<Vec<RGBA8>, PngError> {
   });
   decompress_idat_to_temp_storage(&mut temp_memory_buffer, idat_slice_it)?;
   //
-  todo!()
+  let mut vec = Vec::new();
+  vec.resize((ihdr.width * ihdr.height) as usize, RGBA8::default());
+  //
+  unfilter_decompressed_data(ihdr, &mut &mut temp_memory_buffer, |x, y, data| {
+    //println!("x: {x}, y: {y}, data: {data:?}", x = x, y = y, data = data);
+    vec[(y * ihdr.width + x) as usize] = bytemuck::cast_slice(data)[0];
+  })?;
+  //
+  Ok(vec)
 }
