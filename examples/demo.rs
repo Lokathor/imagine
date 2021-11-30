@@ -21,6 +21,9 @@ fn parse_me_a_png_yo(png: &[u8]) -> Result<Vec<RGBA8>, PngError> {
 
   let ihdr =
     it.next().ok_or(PngError::NoChunksPresent)??.to_ihdr().ok_or(PngError::FirstChunkNotIHDR)?;
+
+  // TODO: support other pixel formats by automatically converting non-RGBA8 data
+  // into RGBA8 data during the unfiltering op.
   assert_eq!(ihdr.pixel_format, PngPixelFormat::RGBA8);
 
   let mut temp_memory_buffer: Vec<u8> = vec![0; ihdr.temp_memory_requirement()];
