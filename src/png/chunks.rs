@@ -238,7 +238,7 @@ impl<'b> TryFrom<RawPngChunk<'b>> for PngChunk<'b> {
 /// * The Greyscale (`Y`) and Indexed (`I`) formats allow for pixels that are
 ///   only 1, 2, or 4 bits each. In this case, the pixels are tightly packed
 ///   into bytes, with the left-most pixel being the highest bits of the byte.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[allow(missing_docs)]
 pub enum PngPixelFormat {
   Y1,
