@@ -31,16 +31,29 @@ pub struct BmpFileHeader {
 * BITMAPV5HEADER (124)
 */
 
-/// todo: docs
+/// Header for Windows 2.0 and OS/2 1.x images.
 ///
-/// Holds info from the the 12 byte `BITMAPCOREHEADER` and `OS21XBITMAPHEADER`
+/// Unlikely to be seen in modern times.
+///
+/// Corresponds to the the 12 byte `BITMAPCOREHEADER` struct (aka
+/// `OS21XBITMAPHEADER`).
 pub struct BitmapCoreHeader {
+  /// Width in pixels
   width: i16,
+
+  /// Height in pixels.
+  ///
+  /// Negative height means that the image origin is the top left and rows go
+  /// down. Otherwise the origin is the bottom left and rows go up.
   height: i16,
+
+  /// Values <=8 indicate indexed color, and that an appropriately sized palette
+  /// will be present.
   bits_per_pixel: u16,
 }
 impl TryFrom<[u8; 12]> for BitmapCoreHeader {
   type Error = ();
+  #[inline]
   fn try_from(a: [u8; 12]) -> Result<Self, Self::Error> {
     if u32::from_le_bytes(a[0..4].try_into().unwrap()) != 12 {
       return Err(());
@@ -49,13 +62,15 @@ impl TryFrom<[u8; 12]> for BitmapCoreHeader {
       return Err(());
     }
     Ok(Self {
-      width: i16::from_le_bytes([a[4], a[5]]),
-      height: i16::from_le_bytes([a[6], a[7]]),
-      bits_per_pixel: u16::from_le_bytes([a[10], a[11]]),
+      width: i16::from_le_bytes(a[4..6].try_into().unwrap()),
+      height: i16::from_le_bytes(a[6..8].try_into().unwrap()),
+      bits_per_pixel: u16::from_le_bytes(a[10..12].try_into().unwrap()),
     })
   }
 }
 impl From<BitmapCoreHeader> for [u8; 12] {
+  #[inline]
+  #[must_use]
   fn from(header: BitmapCoreHeader) -> Self {
     let mut a = [0; 12];
     a[0..4].copy_from_slice(12_u32.to_le_bytes().as_slice());
