@@ -10,9 +10,10 @@ bytemuck = "1"
 miniz_oxide = { version = "0.5", default-features = false, optional = true }
 
 [features]
-default = ["png"]
+default = ["png", "bmp"]
 alloc = []
 png = ["miniz_oxide"]
+bmp = []
 
 [dev-dependencies]
 pixels = "0.8"

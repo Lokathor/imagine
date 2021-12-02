@@ -20,5 +20,11 @@ compile_error!("this crate assumes 32-bit or bigger pointers!");
 pub mod pixel_formats;
 pub use pixel_formats::*;
 
+pub mod ascii_array;
+pub use ascii_array::*;
+
 #[cfg(feature = "png")]
 pub mod png;
+
+#[cfg(feature = "bmp")]
+pub mod bmp;
