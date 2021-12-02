@@ -1,17 +1,5 @@
-use core::num::{NonZeroU16, NonZeroU32};
-
 use crate::AsciiArray;
-
-// All multi-byte values in BMP are LE values.
-
-/*
-== BMP File Header:
-2 bytes header tag: BM, BA, CI, CP, IC, PT
-4 bytes LE: size of the bmp in bytes
-2 bytes: reserved0
-2 bytes: reserved1
-4 bytes LE: pixel array offset within the file
-*/
+use core::num::{NonZeroU16, NonZeroU32};
 
 pub struct BmpFileHeader {
   tag: AsciiArray<2>,
@@ -21,7 +9,6 @@ pub struct BmpFileHeader {
 
 /*
 == DIB Header: one of any of the following structs:
-* BITMAPCOREHEADER / OS21XBITMAPHEADER (12)
 * OS22XBITMAPHEADER (64)
 * OS22XBITMAPHEADER (16 byte variant)
 * BITMAPINFOHEADER (40)
@@ -43,12 +30,16 @@ pub struct BitmapCoreHeader {
 
   /// Height in pixels.
   ///
-  /// Negative height means that the image origin is the top left and rows go
-  /// down. Otherwise the origin is the bottom left and rows go up.
+  /// In later versions of BMP, negative height means that the image origin is
+  /// the top left and rows go down. Otherwise the origin is the bottom left,
+  /// and rows go up. In this early version values are expected to always be
+  /// positive, but if we do see a negative height here then probably we want to
+  /// follow the same origin-flipping convention.
   height: i16,
 
-  /// Values <=8 indicate indexed color, and that an appropriately sized palette
-  /// will be present.
+  /// In this version of BMP, all colors are expected to be indexed, and this is
+  /// the bits per index value (8 or less). An appropriate palette value should
+  /// also be present in the bitmap.
   bits_per_pixel: u16,
 }
 impl TryFrom<[u8; 12]> for BitmapCoreHeader {
