@@ -38,7 +38,7 @@ fn main() -> Result<(), Error> {
     let surface_texture = SurfaceTexture::new(window_size.width, window_size.height, &window);
     Pixels::new(width, height, surface_texture)?
   };
-  pixels.clear_color(Color::WHITE);
+  pixels.set_clear_color(Color::WHITE);
 
   event_loop.run(move |event, _, control_flow| match event {
     Event::WindowEvent { event: WindowEvent::CloseRequested, .. } => {
