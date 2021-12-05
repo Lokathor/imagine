@@ -16,5 +16,5 @@ png = ["miniz_oxide"]
 
 [dev-dependencies]
 #pixels = "0.8"
-pixels = { git = "https://github.com/parasyte/pixels", branch="feature/clear-color" }
+pixels = { git = "https://github.com/parasyte/pixels", rev = "4c6682e65bb417cdaa6e9964cbace5369149452d" }
 winit = "0.25"
