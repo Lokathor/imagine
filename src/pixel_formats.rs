@@ -89,9 +89,9 @@ pub struct Y16_BE {
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[repr(C)]
 pub struct RGB8 {
-  r: u8,
-  g: u8,
-  b: u8,
+  pub r: u8,
+  pub g: u8,
+  pub b: u8,
 }
 /// An RGB value, 16-bits per channel.
 ///
@@ -100,9 +100,9 @@ pub struct RGB8 {
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[repr(C)]
 pub struct RGB16_BE {
-  r: [u8; 2],
-  g: [u8; 2],
-  b: [u8; 2],
+  pub r: [u8; 2],
+  pub g: [u8; 2],
+  pub b: [u8; 2],
 }
 
 /// Eight 1-bit indexd pixels, tightly packed.
@@ -111,7 +111,7 @@ pub struct RGB16_BE {
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[repr(C)]
 pub struct Index1x8 {
-  i: u8,
+  pub i: u8,
 }
 /// Four 2-bit indexed pixels, tightly packed.
 ///
@@ -119,7 +119,7 @@ pub struct Index1x8 {
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[repr(C)]
 pub struct Index2x4 {
-  i: u8,
+  pub i: u8,
 }
 /// Two 4-bit indexed pixels, tightly packed.
 ///
@@ -127,21 +127,21 @@ pub struct Index2x4 {
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[repr(C)]
 pub struct Index4x2 {
-  i: u8,
+  pub i: u8,
 }
 /// An 8-bit indexed pixel.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[repr(C)]
 pub struct Index8 {
-  i: u8,
+  pub i: u8,
 }
 
 /// An 8-bits per channel greyscale + alpha pixel.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[repr(C)]
 pub struct YA8 {
-  y: u8,
-  a: u8,
+  pub y: u8,
+  pub a: u8,
 }
 /// A 16-bits per channel greyscale + alpha pixel.
 ///
@@ -150,18 +150,18 @@ pub struct YA8 {
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[repr(C)]
 pub struct YA16_BE {
-  y: [u8; 2],
-  a: [u8; 2],
+  pub y: [u8; 2],
+  pub a: [u8; 2],
 }
 
 /// An 8-bits per channel RGBA pixel.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[repr(C)]
 pub struct RGBA8 {
-  r: u8,
-  g: u8,
-  b: u8,
-  a: u8,
+  pub r: u8,
+  pub g: u8,
+  pub b: u8,
+  pub a: u8,
 }
 /// A 16-bits per channel RGBA pixel.
 ///
@@ -170,10 +170,10 @@ pub struct RGBA8 {
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[repr(C)]
 pub struct RGBA16_BE {
-  r: [u8; 2],
-  g: [u8; 2],
-  b: [u8; 2],
-  a: [u8; 2],
+  pub r: [u8; 2],
+  pub g: [u8; 2],
+  pub b: [u8; 2],
+  pub a: [u8; 2],
 }
 
 unsafe impl Zeroable for Y1x8 {}

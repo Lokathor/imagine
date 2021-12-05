@@ -283,7 +283,7 @@ impl PngPixelFormat {
   }
   #[inline]
   #[must_use]
-  pub const fn bytes_per_pixel(self) -> usize {
+  pub const fn filter_chunk_size(self) -> usize {
     use PngPixelFormat::*;
     match self {
       Y1 | Y2 | Y4 | Y8 | I1 | I2 | I4 | I8 => 1,
