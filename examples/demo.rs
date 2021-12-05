@@ -103,7 +103,7 @@ fn parse_me_a_png_yo(png: &[u8]) -> Result<(Vec<RGBA8>, u32, u32), PngError> {
   decompress_idat_to_temp_storage(&mut temp_memory_buffer, idat_slice_it)?;
   //
   let mut final_storage = Vec::new();
-  final_storage.resize((ihdr.width * ihdr.height) as usize, RGBA8::default());
+  final_storage.resize((ihdr.width.saturating_mul(ihdr.height)) as usize, RGBA8::default());
   //
   match ihdr.pixel_format {
     // we already have all four channels
