@@ -1,11 +1,16 @@
 use imagine::{png::*, RGB16_BE, RGB8, RGBA16_BE, RGBA8, YA16_BE, YA8};
-use pixels::{Error, Pixels, SurfaceTexture};
+use pixels::{wgpu::Color, Error, Pixels, SurfaceTexture};
 use winit::{
   dpi::LogicalSize,
   event::{Event, WindowEvent},
   event_loop::{ControlFlow, EventLoop},
   window::WindowBuilder,
 };
+
+// Work around for https://github.com/rust-windowing/winit/pull/2078
+#[cfg(target_os = "macos")]
+#[link(name = "ColorSync", kind = "framework")]
+extern "C" {}
 
 #[allow(dead_code)]
 fn main() -> Result<(), Error> {
@@ -32,6 +37,7 @@ fn main() -> Result<(), Error> {
     let surface_texture = SurfaceTexture::new(window_size.width, window_size.height, &window);
     Pixels::new(width, height, surface_texture)?
   };
+  pixels.clear_color(Color::WHITE);
 
   event_loop.run(move |event, _, control_flow| match event {
     Event::WindowEvent { event: WindowEvent::CloseRequested, .. } => {
@@ -80,6 +86,7 @@ fn parse_me_a_png_yo(png: &[u8]) -> Result<(Vec<RGBA8>, u32, u32), PngError> {
   println!("{:?}", ihdr);
 
   let mut palette: Option<&[RGB8]> = None;
+  let mut transparency: Option<tRNS> = None;
 
   let idat_peek = it.peekable();
   let idat_slice_it = idat_peek.filter_map(|r_chunk| match r_chunk {
@@ -87,6 +94,11 @@ fn parse_me_a_png_yo(png: &[u8]) -> Result<(Vec<RGBA8>, u32, u32), PngError> {
     Ok(PngChunk::PLTE(PLTE { data })) => {
       println!("Found a Palette!");
       palette = Some(data);
+      None
+    }
+    Ok(PngChunk::tRNS(t)) => {
+      println!("Found Transparency!");
+      transparency = Some(t);
       None
     }
     Ok(PngChunk::iCCP(_)) => {
@@ -127,7 +139,21 @@ fn parse_me_a_png_yo(png: &[u8]) -> Result<(Vec<RGBA8>, u32, u32), PngError> {
     PngPixelFormat::RGB8 => {
       unfilter_decompressed_data(ihdr, &mut temp_memory_buffer, |x, y, data| {
         let rgb8: RGB8 = bytemuck::cast_slice(data)[0];
-        final_storage[(y * ihdr.width + x) as usize] = rgb8_to_rgba8(rgb8);
+        let rgba8 = if let Some(trns) = transparency {
+          match trns.as_rgb8() {
+            Some(rgb8_trns_key) => {
+              if rgb8 == rgb8_trns_key {
+                RGBA8 { r: rgb8.r, g: rgb8.g, b: rgb8.b, a: 0 }
+              } else {
+                rgb8_to_rgba8(rgb8)
+              }
+            }
+            None => rgb8_to_rgba8(rgb8),
+          }
+        } else {
+          rgb8_to_rgba8(rgb8)
+        };
+        final_storage[(y * ihdr.width + x) as usize] = rgba8;
       })?
     }
     PngPixelFormat::RGB16 => {
@@ -230,8 +256,3 @@ fn y8_to_rgba8(y8: u8) -> RGBA8 {
 fn rgb8_to_rgba8(rgb8: RGB8) -> RGBA8 {
   RGBA8 { r: rgb8.r, g: rgb8.g, b: rgb8.b, a: 0xFF }
 }
-
-// Work around for https://github.com/rust-windowing/winit/pull/2078
-#[cfg(target_os = "macos")]
-#[link(name = "ColorSync", kind = "framework")]
-extern "C" {}

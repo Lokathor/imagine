@@ -15,5 +15,6 @@ alloc = []
 png = ["miniz_oxide"]
 
 [dev-dependencies]
-pixels = "0.8"
+#pixels = "0.8"
+pixels = { git = "https://github.com/parasyte/pixels", branch="feature/clear-color" }
 winit = "0.25"

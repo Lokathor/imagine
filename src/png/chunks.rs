@@ -625,6 +625,16 @@ impl<'b> tRNS<'b> {
       _ => None,
     }
   }
+
+  /// Converts this value into an [RGB8] value if it's an `RGB` tag.
+  #[inline]
+  #[must_use]
+  pub const fn as_rgb8(self) -> Option<RGB8> {
+    match self {
+      Self::RGB { r, g, b } => Some(RGB8 { r: r as u8, g: g as u8, b: b as u8 }),
+      _ => None,
+    }
+  }
 }
 
 /// `cHRM`: Primary chromaticities and white point.
