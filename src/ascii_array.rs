@@ -13,6 +13,7 @@ use core::fmt::Write;
 /// so this is a useful newtype to use in other structures to give them a better
 /// `Debug` output.
 #[derive(PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[repr(transparent)]
 pub struct AsciiArray<const N: usize>(pub [u8; N]);
 
 impl<const N: usize> Default for AsciiArray<N> {
