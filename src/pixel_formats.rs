@@ -37,7 +37,7 @@
 //!   bits, and to *increase* bit depth you should use the current bit pattern
 //!   as the top X many bits, and then copy that bit pattern down however many
 //!   times is required to fill in all newly added bits.
-//! * Alternately, you can use floats: in this case, increaseing or decreasing
+//! * Alternately, you can use floats: in this case, increasing or decreasing
 //!   the bit depth uses the same system. Convert the integer value to a float
 //!   and divide by the maximum value of the starting bit depth (giving a
 //!   normalized value), then multiply by the maximum of the target bit depth,

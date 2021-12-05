@@ -150,15 +150,12 @@ where
         .map(|(r_y, (f, pixels))| (r_y as u32, f, pixels))
     };
 
-    extern crate std;
-
     // The first line of each image has special handling because filters can
     // refer to the previous line, but for the first line the "previous line" is
     // an implied zero.
     let mut b_pixels = if let Some((reduced_y, f, pixels)) = row_iter.next() {
       let mut p_it =
         pixels.chunks_exact_mut(filter_chunk_size).enumerate().map(|(r_x, d)| (r_x as u32, d));
-      std::print!("{}, ", f);
       match f {
         1 => {
           // Sub
@@ -220,17 +217,16 @@ where
     };
 
     for (reduced_y, f, pixels) in row_iter {
-      let mut line_it =
+      let mut p_it =
         pixels.chunks_exact_mut(filter_chunk_size).enumerate().map(|(r_x, d)| (r_x as u32, d));
       let mut b_it = b_pixels.chunks_exact(filter_chunk_size);
-      std::print!("{}, ", f);
       match f {
         1 => {
           // Sub
-          let (reduced_x, mut pixel): (u32, &mut [u8]) = line_it.next().unwrap();
+          let (reduced_x, mut pixel): (u32, &mut [u8]) = p_it.next().unwrap();
           send_out_pixel(header, image_level, reduced_x, reduced_y, pixel, &mut op);
           let mut a_pixel = pixel;
-          while let Some((reduced_x, pixel)) = line_it.next() {
+          while let Some((reduced_x, pixel)) = p_it.next() {
             a_pixel.iter().copied().zip(pixel.iter_mut()).for_each(|(a, p)| *p = p.wrapping_add(a));
             send_out_pixel(header, image_level, reduced_x, reduced_y, pixel, &mut op);
             //
@@ -239,7 +235,7 @@ where
         }
         2 => {
           // Up
-          for ((reduced_x, pixel), b_pixel) in line_it.zip(b_it) {
+          for ((reduced_x, pixel), b_pixel) in p_it.zip(b_it) {
             b_pixel.iter().copied().zip(pixel.iter_mut()).for_each(|(b, p)| *p = p.wrapping_add(b));
             //
             send_out_pixel(header, image_level, reduced_x, reduced_y, pixel, &mut op);
@@ -247,21 +243,20 @@ where
         }
         3 => {
           // Average
-          let mut ab_it = line_it.zip(b_it);
-          let ((reduced_x, mut pixel), b_pixel) = ab_it.next().unwrap();
+          let mut pb_it = p_it.zip(b_it).map(|((r_x, p), b)| (r_x, p, b));
+          let (reduced_x, pixel, b_pixel) = pb_it.next().unwrap();
           pixel
             .iter_mut()
             .zip(b_pixel.iter().copied())
             .for_each(|(p, b)| *p = p.wrapping_add(b / 2));
           send_out_pixel(header, image_level, reduced_x, reduced_y, pixel, &mut op);
-          let mut a_pixel = pixel;
-          while let Some(((reduced_x, pixel), b_pixel)) = ab_it.next() {
-            a_pixel
-              .iter()
-              .copied()
-              .zip(b_pixel.iter().copied())
-              .zip(pixel.iter_mut())
-              .for_each(|((a, b), p)| *p = p.wrapping_add(((a as usize + b as usize) / 2) as u8));
+          let mut a_pixel: &[u8] = pixel;
+          while let Some((reduced_x, pixel, b_pixel)) = pb_it.next() {
+            a_pixel.iter().copied().zip(b_pixel.iter().copied()).zip(pixel.iter_mut()).for_each(
+              |((a, b), p)| {
+                *p = p.wrapping_add(((a as u32 + b as u32) / 2) as u8);
+              },
+            );
             send_out_pixel(header, image_level, reduced_x, reduced_y, pixel, &mut op);
             //
             a_pixel = pixel;
@@ -269,16 +264,15 @@ where
         }
         4 => {
           // Paeth
-          let mut ab_it = line_it.zip(b_it);
-          let ((reduced_x, mut pixel), b_pixel) = ab_it.next().unwrap();
-          pixel
-            .iter_mut()
-            .zip(b_pixel.iter().copied())
-            .for_each(|(p, b)| *p = p.wrapping_add(b / 2));
+          let mut pb_it = p_it.zip(b_it).map(|((r_x, p), b)| (r_x, p, b));
+          let (reduced_x, pixel, b_pixel) = pb_it.next().unwrap();
+          pixel.iter_mut().zip(b_pixel.iter().copied()).for_each(|(p, b)| {
+            *p = p.wrapping_add(paeth_predict(0, b, 0));
+          });
           send_out_pixel(header, image_level, reduced_x, reduced_y, pixel, &mut op);
           let mut a_pixel = pixel;
           let mut c_pixel = b_pixel;
-          while let Some(((reduced_x, pixel), b_pixel)) = ab_it.next() {
+          while let Some((reduced_x, pixel, b_pixel)) = pb_it.next() {
             a_pixel
               .iter()
               .copied()
@@ -295,7 +289,7 @@ where
           }
         }
         _ => {
-          for (reduced_x, pixel) in line_it {
+          for (reduced_x, pixel) in p_it {
             // None
             send_out_pixel(header, image_level, reduced_x, reduced_y, pixel, &mut op);
           }
