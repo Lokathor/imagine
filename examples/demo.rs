@@ -28,6 +28,7 @@ fn main() -> Result<(), Error> {
       .with_title("imagine> demo window")
       .with_inner_size(size)
       .with_min_inner_size(size)
+      .with_resizable(false)
       .build(&event_loop)
       .unwrap()
   };
