@@ -1,6 +1,6 @@
 use bytemuck::cast_slice;
 
-use crate::pixel_formats::RGB8;
+use crate::{pixel_formats::RGB8, RGB16_BE};
 
 use super::*;
 
@@ -629,9 +629,21 @@ impl<'b> tRNS<'b> {
   /// Converts this value into an [RGB8] value if it's an `RGB` tag.
   #[inline]
   #[must_use]
-  pub const fn as_rgb8(self) -> Option<RGB8> {
+  pub const fn to_rgb8(self) -> Option<RGB8> {
     match self {
       Self::RGB { r, g, b } => Some(RGB8 { r: r as u8, g: g as u8, b: b as u8 }),
+      _ => None,
+    }
+  }
+
+  /// Converts this value into an [RGB16] value if it's an `RGB` tag.
+  #[inline]
+  #[must_use]
+  pub const fn to_rgb16(self) -> Option<RGB16_BE> {
+    match self {
+      Self::RGB { r, g, b } => {
+        Some(RGB16_BE { r: r.to_be_bytes(), g: g.to_be_bytes(), b: b.to_be_bytes() })
+      }
       _ => None,
     }
   }
