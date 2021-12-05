@@ -230,3 +230,8 @@ fn y8_to_rgba8(y8: u8) -> RGBA8 {
 fn rgb8_to_rgba8(rgb8: RGB8) -> RGBA8 {
   RGBA8 { r: rgb8.r, g: rgb8.g, b: rgb8.b, a: 0xFF }
 }
+
+// Work around for https://github.com/rust-windowing/winit/pull/2078
+#[cfg(target_os = "macos")]
+#[link(name = "ColorSync", kind = "framework")]
+extern "C" {}
