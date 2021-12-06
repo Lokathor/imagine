@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 
-use imagine::png::{critical_errors_only, PngChunk, RawPngChunkIter};
+use imagine::png::{PngChunk, RawPngChunkIter};
 
 /// Recursively walks over the `path` given, which must be a directory.
 ///
@@ -68,14 +68,10 @@ pub fn recursive_read_dir(path: impl AsRef<Path>, mut op: impl FnMut(PathBuf)) {
 fn afl_images_no_panic() {
   let png_folder = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("png");
   recursive_read_dir(png_folder, |path_buf| {
-    println!("using file `{path_buf}`", path_buf = path_buf.display());
-    // right now we just walk the chunks.
+    println!("== Using File `{path_buf}`", path_buf = path_buf.display());
     let png: Vec<u8> = std::fs::read(path_buf.as_path()).unwrap();
-    RawPngChunkIter::new(&png)
-      .map(PngChunk::try_from)
-      .filter(critical_errors_only)
-      .for_each(|_| ());
-
+    RawPngChunkIter::new(&png).map(PngChunk::try_from).for_each(|res| println!("{:?}", res));
     // TODO: use the chunks
   });
+  panic!("end");
 }

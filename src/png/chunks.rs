@@ -226,7 +226,13 @@ impl<'b> TryFrom<RawPngChunk<'b>> for PngChunk<'b> {
         }),
         _ => return Err(Illegal_tIME),
       },
-      _ => return Err(UnknownChunkType),
+      _ => {
+        if (chunk_ty[0] & (1 << 5)) != 0 {
+          return Err(UnknownAncillaryChunk);
+        } else {
+          return Err(UnknownCriticalChunk);
+        }
+      }
     })
   }
 }

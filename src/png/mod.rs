@@ -254,7 +254,8 @@ pub enum PngError {
   Illegal_pHYs,
   Illegal_sPLT,
   Illegal_tIME,
-  UnknownChunkType,
+  UnknownCriticalChunk,
+  UnknownAncillaryChunk,
   NoChunksPresent,
   NoIDATChunks,
   DecompressionFailure,
@@ -264,10 +265,14 @@ pub enum PngError {
 }
 impl PngError {
   /// Returns `true` if the error is a critical chunk parsing error.
+  ///
+  /// Of course, this is just based on the PNG spec's normal assumptions of what
+  /// chunks are critical. You're always free to have your program try to
+  /// compensate for any errors if you want.
   pub fn is_critical(self) -> bool {
     use PngError::*;
     match self {
-      FirstChunkNotIHDR | Illegal_IHDR | Illegal_PLTE => true,
+      FirstChunkNotIHDR | Illegal_IHDR | Illegal_PLTE | UnknownCriticalChunk => true,
       _ => false,
     }
   }
