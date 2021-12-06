@@ -1,4 +1,4 @@
-use imagine::{png::*, RGB16_BE, RGB8, RGBA16_BE, RGBA8, YA16_BE, YA8};
+use imagine::{png::*, RGB16_BE, RGB8, RGBA16_BE, RGBA8, Y16_BE, YA16_BE, YA8};
 use pixels::{wgpu::Color, Error, Pixels, SurfaceTexture};
 use winit::{
   dpi::LogicalSize,
@@ -12,7 +12,6 @@ use winit::{
 #[link(name = "ColorSync", kind = "framework")]
 extern "C" {}
 
-#[allow(dead_code)]
 fn main() -> Result<(), Error> {
   const GLIDER_BIG_RAINBOW: &[u8] = include_bytes!("glider-big-rainbow.png");
 
@@ -79,6 +78,10 @@ fn main() -> Result<(), Error> {
   });
 }
 
+/// Note(Lokathor): This is this is an example of how you can turn PNG data into
+/// a pile of RGBA8 pixels, along with a width and height. In the future this
+/// will be improved to be more robust, and then eventually moved into the
+/// library itself (behind an `alloc` feature).
 fn parse_me_a_png_yo(png: &[u8]) -> Result<(Vec<RGBA8>, u32, u32), PngError> {
   println!("== Parsing A PNG...");
   let mut it = RawPngChunkIter::new(png).map(PngChunk::try_from).filter(critical_errors_only);
@@ -102,6 +105,7 @@ fn parse_me_a_png_yo(png: &[u8]) -> Result<(Vec<RGBA8>, u32, u32), PngError> {
       transparency = Some(t);
       None
     }
+    // TODO: support utilizing background chunks.
     Ok(PngChunk::iCCP(_)) => {
       println!("iCCP(iCCP {{ .. }})");
       None
@@ -153,7 +157,7 @@ fn parse_me_a_png_yo(png: &[u8]) -> Result<(Vec<RGBA8>, u32, u32), PngError> {
       unfilter_decompressed_data(ihdr, &mut temp_memory_buffer, |x, y, data| {
         let rgb16_be: RGB16_BE = bytemuck::cast_slice(data)[0];
         let mut rgba8 = rgb16_be_to_rgba8(rgb16_be);
-        if let Some(rgb16_be_trns_key) = transparency.and_then(tRNS::to_rgb16) {
+        if let Some(rgb16_be_trns_key) = transparency.and_then(tRNS::to_rgb16_be) {
           if rgb16_be == rgb16_be_trns_key {
             rgba8.a = 0;
           }
@@ -162,37 +166,65 @@ fn parse_me_a_png_yo(png: &[u8]) -> Result<(Vec<RGBA8>, u32, u32), PngError> {
       })?
     }
 
-    // TODO: tRNS support for Grayscale
-
     // grayscale
     PngPixelFormat::Y1 => {
       unfilter_decompressed_data(ihdr, &mut temp_memory_buffer, |x, y, data| {
         let y1 = bytemuck::cast_slice(data)[0];
-        final_storage[(y * ihdr.width + x) as usize] = y1_to_rgba8(y1);
+        let mut rgba8 = y1_to_rgba8(y1);
+        if let Some(y8_trns_key) = transparency.and_then(tRNS::to_y8) {
+          if y1 == y8_trns_key.y {
+            rgba8.a = 0;
+          }
+        };
+        final_storage[(y * ihdr.width + x) as usize] = rgba8;
       })?
     }
     PngPixelFormat::Y2 => {
       unfilter_decompressed_data(ihdr, &mut temp_memory_buffer, |x, y, data| {
         let y2 = bytemuck::cast_slice(data)[0];
-        final_storage[(y * ihdr.width + x) as usize] = y2_to_rgba8(y2);
+        let mut rgba8 = y2_to_rgba8(y2);
+        if let Some(y8_trns_key) = transparency.and_then(tRNS::to_y8) {
+          if y2 == y8_trns_key.y {
+            rgba8.a = 0;
+          }
+        };
+        final_storage[(y * ihdr.width + x) as usize] = rgba8;
       })?
     }
     PngPixelFormat::Y4 => {
       unfilter_decompressed_data(ihdr, &mut temp_memory_buffer, |x, y, data| {
         let y4 = bytemuck::cast_slice(data)[0];
-        final_storage[(y * ihdr.width + x) as usize] = y4_to_rgba8(y4);
+        let mut rgba8 = y4_to_rgba8(y4);
+        if let Some(y8_trns_key) = transparency.and_then(tRNS::to_y8) {
+          if y4 == y8_trns_key.y {
+            rgba8.a = 0;
+          }
+        };
+        final_storage[(y * ihdr.width + x) as usize] = rgba8;
       })?
     }
     PngPixelFormat::Y8 => {
       unfilter_decompressed_data(ihdr, &mut temp_memory_buffer, |x, y, data| {
         let y8 = bytemuck::cast_slice(data)[0];
-        final_storage[(y * ihdr.width + x) as usize] = y8_to_rgba8(y8);
+        let mut rgba8 = y1_to_rgba8(y8);
+        if let Some(y8_trns_key) = transparency.and_then(tRNS::to_y8) {
+          if y8 == y8_trns_key.y {
+            rgba8.a = 0;
+          }
+        };
+        final_storage[(y * ihdr.width + x) as usize] = rgba8;
       })?
     }
     PngPixelFormat::Y16 => {
       unfilter_decompressed_data(ihdr, &mut temp_memory_buffer, |x, y, data| {
-        let y8 = bytemuck::cast_slice(data)[0];
-        final_storage[(y * ihdr.width + x) as usize] = y8_to_rgba8(y8);
+        let y16: Y16_BE = bytemuck::cast_slice(data)[0];
+        let mut rgba8 = y8_to_rgba8(y16.y[0]);
+        if let Some(y16_trns_key) = transparency.and_then(tRNS::to_y16_be) {
+          if y16 == y16_trns_key {
+            rgba8.a = 0;
+          }
+        };
+        final_storage[(y * ihdr.width + x) as usize] = rgba8;
       })?
     }
 
@@ -214,8 +246,6 @@ fn parse_me_a_png_yo(png: &[u8]) -> Result<(Vec<RGBA8>, u32, u32), PngError> {
       })?
     }
 
-    // TODO: tRNS support for indexed
-
     // indexed color looks into the palette (or black)
     PngPixelFormat::I1 | PngPixelFormat::I2 | PngPixelFormat::I4 | PngPixelFormat::I8 => {
       unfilter_decompressed_data(ihdr, &mut temp_memory_buffer, |x, y, data| {
@@ -226,8 +256,19 @@ fn parse_me_a_png_yo(png: &[u8]) -> Result<(Vec<RGBA8>, u32, u32), PngError> {
             None => RGB8::default(),
           })
           .unwrap_or_default();
-        final_storage[(y * ihdr.width + x) as usize] =
-          RGBA8 { r: rgb8.r, g: rgb8.g, b: rgb8.b, a: 0xFF };
+        let rgba8 = RGBA8 {
+          r: rgb8.r,
+          g: rgb8.g,
+          b: rgb8.b,
+          a: transparency
+            .and_then(|trns| match trns {
+              tRNS::Y { y } => y.to_be_bytes().get(index).copied(),
+              tRNS::RGB { .. } => trns.rgb_to_index().unwrap().get(index).copied(),
+              tRNS::Index { data } => data.get(index).copied(),
+            })
+            .unwrap_or(0xFF),
+        };
+        final_storage[(y * ihdr.width + x) as usize] = rgba8;
       })?
     }
   }

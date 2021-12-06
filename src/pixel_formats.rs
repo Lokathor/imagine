@@ -51,7 +51,7 @@ use bytemuck::{Pod, Zeroable};
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[repr(C)]
 pub struct Y1x8 {
-  y: u8,
+  pub y: u8,
 }
 /// Four 2-bit greyscale pixels, tightly packed.
 ///
@@ -59,7 +59,7 @@ pub struct Y1x8 {
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[repr(C)]
 pub struct Y2x4 {
-  y: u8,
+  pub y: u8,
 }
 /// Two 4-bit greyscale pixels, tightly packed.
 ///
@@ -67,13 +67,13 @@ pub struct Y2x4 {
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[repr(C)]
 pub struct Y4x2 {
-  y: u8,
+  pub y: u8,
 }
 /// An 8-bit greyscale pixel.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[repr(C)]
 pub struct Y8 {
-  y: u8,
+  pub y: u8,
 }
 /// A 16-bit greyscale pixel.
 ///
@@ -82,7 +82,7 @@ pub struct Y8 {
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[repr(C)]
 pub struct Y16_BE {
-  y: [u8; 2],
+  pub y: [u8; 2],
 }
 
 /// An RGB value, 8-bits per channel.
