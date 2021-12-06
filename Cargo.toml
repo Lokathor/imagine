@@ -4,6 +4,8 @@ version = "0.0.6"
 authors = ["Lokathor <zefria@gmail.com>"]
 edition = "2021"
 license = "Zlib OR Apache-2.0 OR MIT"
+repository = "https://github.com/Lokathor/imagine"
+description = "A crate to help with images."
 
 [dependencies]
 bytemuck = "1"
