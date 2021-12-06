@@ -1,6 +1,6 @@
 use bytemuck::cast_slice;
 
-use crate::pixel_formats::RGB8;
+use crate::{pixel_formats::RGB8, RGB16_BE, Y16_BE, Y8};
 
 use super::*;
 
@@ -226,7 +226,13 @@ impl<'b> TryFrom<RawPngChunk<'b>> for PngChunk<'b> {
         }),
         _ => return Err(Illegal_tIME),
       },
-      _ => return Err(UnknownChunkType),
+      _ => {
+        if (chunk_ty[0] & (1 << 5)) != 0 {
+          return Err(UnknownAncillaryChunk);
+        } else {
+          return Err(UnknownCriticalChunk);
+        }
+      }
     })
   }
 }
@@ -283,7 +289,7 @@ impl PngPixelFormat {
   }
   #[inline]
   #[must_use]
-  pub const fn bytes_per_pixel(self) -> usize {
+  pub const fn filter_chunk_size(self) -> usize {
     use PngPixelFormat::*;
     match self {
       Y1 | Y2 | Y4 | Y8 | I1 | I2 | I4 | I8 => 1,
@@ -622,6 +628,48 @@ impl<'b> tRNS<'b> {
         let [b0, b1] = b.to_be_bytes();
         Some([r0, r1, g0, g1, b0, b1])
       }
+      _ => None,
+    }
+  }
+
+  /// Converts this value into an [RGB8] value if it's an `RGB` tag.
+  #[inline]
+  #[must_use]
+  pub const fn to_rgb8(self) -> Option<RGB8> {
+    match self {
+      Self::RGB { r, g, b } => Some(RGB8 { r: r as u8, g: g as u8, b: b as u8 }),
+      _ => None,
+    }
+  }
+
+  /// Converts this value into an [RGB16_BE] value if it's an `RGB` tag.
+  #[inline]
+  #[must_use]
+  pub const fn to_rgb16_be(self) -> Option<RGB16_BE> {
+    match self {
+      Self::RGB { r, g, b } => {
+        Some(RGB16_BE { r: r.to_be_bytes(), g: g.to_be_bytes(), b: b.to_be_bytes() })
+      }
+      _ => None,
+    }
+  }
+
+  /// Converts this value into a [Y8] value if it's a `Y` tag.
+  #[inline]
+  #[must_use]
+  pub const fn to_y8(self) -> Option<Y8> {
+    match self {
+      Self::Y { y } => Some(Y8 { y: y as u8 }),
+      _ => None,
+    }
+  }
+
+  /// Converts this value into a [Y16_BE] value if it's a `Y` tag.
+  #[inline]
+  #[must_use]
+  pub const fn to_y16_be(self) -> Option<Y16_BE> {
+    match self {
+      Self::Y { y } => Some(Y16_BE { y: y.to_be_bytes() }),
       _ => None,
     }
   }
