@@ -65,13 +65,14 @@ pub fn recursive_read_dir(path: impl AsRef<Path>, mut op: impl FnMut(PathBuf)) {
 }
 
 #[test]
-fn afl_images_no_panic() {
+fn png_test_images_do_not_panic() {
   let png_folder = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("png");
   recursive_read_dir(png_folder, |path_buf| {
     println!("== Using File `{path_buf}`", path_buf = path_buf.display());
     let png: Vec<u8> = std::fs::read(path_buf.as_path()).unwrap();
     RawPngChunkIter::new(&png).map(PngChunk::try_from).for_each(|res| println!("{:?}", res));
-    // TODO: use the chunks
+
+    // TODO: we should expand the test to do a full parse of the image
   });
-  panic!("end");
+  //panic!("end");
 }

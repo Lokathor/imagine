@@ -1,259 +1,72 @@
 #![forbid(unsafe_code)]
 
+//! Module for Windows Bitmap files (BMP).
+//!
+//! ## Parsing The Format
+//!
+//! Note: All multi-byte values in BMP are always little-endian encoded.
+//!
+//! * A bitmap file always starts with a "file header". This is always 14 bytes.
+//!   * A tag for the kind of bitmap you're expected to find
+//!   * A total size of the file, to check if a file was unexpectedly truncated
+//!   * The position of the bitmap data within the file. However, without
+//!     knowing more you probably can't use this position directly.
+//! * Next is an "info header". There's many versions of this header. The first
+//!   4 bytes are always the size of the full info header, and each version is a
+//!   different size, so this lets you figure out what version is being used for
+//!   this file.
+//! * Next there **might** be bitmask data. If the header is an InfoHeader and
+//!   the compression is [BmpCompression::Bitfields] or
+//!   [BmpCompression::AlphaBitfields] then there will be 3 or 4 `u32` values
+//!   that specify the bit regions for the R, G, B, and possibly A data. These
+//!   compression formats should only appear with 16 or 32 bpp images.
+//! * Next there **might** be a color table. This is mandatory if the bit depth
+//!   is 8 (or less) bits per pixel, and it's optional otherwise. The default
+//!   number of entries is `2**bits_per_pixel`, though most header formats can
+//!   optionally specify a smaller color table. Each entry in the color table is
+//!   generally a `[u8;4]` value (`[b, g, r, 0]`), except if `BmpInfoHeaderCore`
+//!   is used, in which case each entry is a `[u8;3]` value (`[b,g,r]`). There's
+//!   apparently a 2 byte per entry form (indexing into the current system
+//!   palette) that's supposed to only be used while the image is in memory on
+//!   older systems, so you shouldn't find it in files. If the image supports
+//!   alpha, then the color table might contain non-zero alpha values. If all
+//!   alpha values in the color table are 0 you should assume that the color
+//!   table colors are intended to be fully opaque.
+//! * Next there **might** be a gap in the data. This allows the pixel data to
+//!   be re-aligned to 4 (if necessary), though this assumes that the file
+//!   itself was loaded into memory at an alignment of at least 4. The offset of
+//!   the pixel array was given in the file header, use that to skip past the
+//!   gap (if any).
+//! * Next there is the pixel array. This data format depends on the compression
+//!   style used, as defined in the bitmap header. Each row of the bitmap is
+//!   supposedly padded to 4 bytes.
+//! * Next there **might** be another gap region.
+//! * Finally there is the ICC color profile data, if any. The format of this
+//!   data changes depending on what was specified in the bitmap header.
+//!
+//! When the bits per pixel is less than 8 the pixels will be packed within a
+//! byte. In this case, the leftmost pixel is the highest bits of the byte.
+//! * 1, 2, 4, and 8 bits per pixel are indexed color.
+//! * 16 and 32 bits per pixel is direct color, with the bitmasks defining the
+//!   location of each channel within a (little-endian) `u16` or `u32`.
+//! * 24 bits per pixel is direct color and the channel order is always implied
+//!   to be `[b,g,r]` within `[u8; 3]`.
+
 use crate::AsciiArray;
 use core::num::{NonZeroU16, NonZeroU32};
 
-pub struct BmpFileHeader {
-  tag: AsciiArray<2>,
-  file_size: u32,
-  pixel_data_offset: u32,
+mod headers;
+pub use headers::*;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[non_exhaustive]
+pub enum BmpError {
+  ThisIsProbablyNotABmpFile,
+  InsufficientBytes,
+  IncorrectSizeForThisInfoHeaderVersion,
+  UnknownCompression,
+  UnknownHeaderLength,
+  /// The BMP file might be valid, but either way this library doesn't currently
+  /// know how to parse it.
+  ParserIncomplete,
 }
-impl From<[u8; 14]> for BmpFileHeader {
-  #[inline]
-  #[must_use]
-  fn from(value: [u8; 14]) -> Self {
-    Self {
-      tag: AsciiArray(value[0..2].try_into().unwrap()),
-      file_size: u32::from_le_bytes(value[2..6].try_into().unwrap()),
-      pixel_data_offset: u32::from_le_bytes(value[10..14].try_into().unwrap()),
-    }
-  }
-}
-impl From<BmpFileHeader> for [u8; 14] {
-  fn from(h: BmpFileHeader) -> Self {
-    let mut a = [0; 14];
-    a[0..2].copy_from_slice(h.tag.0.as_slice());
-    a[2..6].copy_from_slice(h.file_size.to_le_bytes().as_slice());
-    a[10..14].copy_from_slice(h.pixel_data_offset.to_le_bytes().as_slice());
-    a
-  }
-}
-
-/// Header for Windows 2.0 and OS/2 1.x images.
-///
-/// Unlikely to be seen in modern times.
-///
-/// Corresponds to the the 12 byte `BITMAPCOREHEADER` struct (aka
-/// `OS21XBITMAPHEADER`).
-pub struct BmpCoreHeader {
-  /// Width in pixels
-  width: i16,
-
-  /// Height in pixels.
-  ///
-  /// In later versions of BMP, negative height means that the image origin is
-  /// the top left and rows go down. Otherwise the origin is the bottom left,
-  /// and rows go up. In this early version values are expected to always be
-  /// positive, but if we do see a negative height here then probably we want to
-  /// follow the same origin-flipping convention.
-  height: i16,
-
-  /// In this version of BMP, all colors are expected to be indexed, and this is
-  /// the bits per index value (8 or less). An appropriate palette value should
-  /// also be present in the bitmap.
-  bits_per_pixel: u16,
-}
-impl TryFrom<[u8; 12]> for BmpCoreHeader {
-  type Error = ();
-  #[inline]
-  fn try_from(a: [u8; 12]) -> Result<Self, Self::Error> {
-    if u32::from_le_bytes(a[0..4].try_into().unwrap()) != 12 {
-      return Err(());
-    }
-    if u16::from_le_bytes(a[8..10].try_into().unwrap()) != 1 {
-      return Err(());
-    }
-    Ok(Self {
-      width: i16::from_le_bytes(a[4..6].try_into().unwrap()),
-      height: i16::from_le_bytes(a[6..8].try_into().unwrap()),
-      bits_per_pixel: u16::from_le_bytes(a[10..12].try_into().unwrap()),
-    })
-  }
-}
-impl From<BmpCoreHeader> for [u8; 12] {
-  #[inline]
-  #[must_use]
-  fn from(h: BmpCoreHeader) -> Self {
-    let mut a = [0; 12];
-    a[0..4].copy_from_slice(12_u32.to_le_bytes().as_slice());
-    a[4..6].copy_from_slice(h.width.to_le_bytes().as_slice());
-    a[6..8].copy_from_slice(h.height.to_le_bytes().as_slice());
-    a[8..10].copy_from_slice(1_u16.to_le_bytes().as_slice());
-    a[10..12].copy_from_slice(h.bits_per_pixel.to_le_bytes().as_slice());
-    a
-  }
-}
-
-#[repr(transparent)]
-pub struct BmpCompression(u32);
-
-/// The basic modern bitmap header.
-///
-/// Corresponds to the 40 byte `BITMAPINFOHEADER` struct.
-pub struct BmpInfoHeader {
-  width: i32,
-  height: i32,
-  bits_per_pixel: u16,
-  compression: BmpCompression,
-  /// If `None`, the `compression` must be `RGB` (aka "no compression").
-  image_size: Option<NonZeroU32>,
-  horizontal_ppm: i32,
-  vertical_ppm: i32,
-  /// If `None`, defaults to `2**bits_per_pixel`.
-  palette_size: Option<NonZeroU32>,
-  /// If `None`, all colors are considered important.
-  ///
-  /// This is usually ignored either way.
-  important_colors: Option<NonZeroU32>,
-}
-impl TryFrom<[u8; 40]> for BmpInfoHeader {
-  type Error = ();
-  #[inline]
-  fn try_from(a: [u8; 40]) -> Result<Self, Self::Error> {
-    if u32::from_le_bytes(a[0..4].try_into().unwrap()) != 40 {
-      return Err(());
-    }
-    if u16::from_le_bytes(a[12..14].try_into().unwrap()) != 1 {
-      return Err(());
-    }
-    Ok(Self {
-      width: i32::from_le_bytes(a[4..8].try_into().unwrap()),
-      height: i32::from_le_bytes(a[8..12].try_into().unwrap()),
-      bits_per_pixel: u16::from_le_bytes(a[14..16].try_into().unwrap()),
-      compression: BmpCompression(u32::from_le_bytes(a[16..20].try_into().unwrap())),
-      image_size: NonZeroU32::new(u32::from_le_bytes(a[20..24].try_into().unwrap())),
-      horizontal_ppm: i32::from_le_bytes(a[24..28].try_into().unwrap()),
-      vertical_ppm: i32::from_le_bytes(a[28..32].try_into().unwrap()),
-      palette_size: NonZeroU32::new(u32::from_le_bytes(a[32..36].try_into().unwrap())),
-      important_colors: NonZeroU32::new(u32::from_le_bytes(a[36..40].try_into().unwrap())),
-    })
-  }
-}
-impl From<BmpInfoHeader> for [u8; 40] {
-  #[inline]
-  #[must_use]
-  fn from(h: BmpInfoHeader) -> Self {
-    let mut a = [0; 40];
-    a[0..4].copy_from_slice(40_u32.to_le_bytes().as_slice());
-    a[4..8].copy_from_slice(h.width.to_le_bytes().as_slice());
-    a[8..12].copy_from_slice(h.height.to_le_bytes().as_slice());
-    a[12..14].copy_from_slice(1_u16.to_le_bytes().as_slice());
-    a[14..16].copy_from_slice(h.bits_per_pixel.to_le_bytes().as_slice());
-    a[16..20].copy_from_slice(h.compression.0.to_le_bytes().as_slice());
-    a[20..24]
-      .copy_from_slice(h.image_size.map(NonZeroU32::get).unwrap_or(0).to_le_bytes().as_slice());
-    a[24..28].copy_from_slice(h.horizontal_ppm.to_le_bytes().as_slice());
-    a[28..32].copy_from_slice(h.vertical_ppm.to_le_bytes().as_slice());
-    a[32..36]
-      .copy_from_slice(h.palette_size.map(NonZeroU32::get).unwrap_or(0).to_le_bytes().as_slice());
-    a[36..40].copy_from_slice(
-      h.important_colors.map(NonZeroU32::get).unwrap_or(0).to_le_bytes().as_slice(),
-    );
-    a
-  }
-}
-
-pub enum Halftoning {
-  None,
-  ErrorDiffusion { damping_percentage: u32 },
-  Panda { x: u32, y: u32 },
-  SuperCircle { x: u32, y: u32 },
-}
-
-/// A bitmap header from OS/2 era files, unlikely to be encountered.
-///
-/// Corresponds to the 64 byte `OS22XBITMAPHEADER`, which can also be presented
-/// as a 16 byte header where all additional bytes are implied to be 0.
-pub struct BmpOs22xHeader {
-  width: i32,
-  height: i32,
-  bits_per_pixel: u16,
-  compression: BmpCompression,
-  /// If `None`, the `compression` must be `RGB` (aka "no compression").
-  image_size: Option<NonZeroU32>,
-  horizontal_ppm: i32,
-  vertical_ppm: i32,
-  /// If `None`, defaults to `2**bits_per_pixel`.
-  palette_size: Option<NonZeroU32>,
-  /// If `None`, all colors are considered important.
-  ///
-  /// This is usually ignored either way.
-  important_colors: Option<NonZeroU32>,
-}
-impl TryFrom<[u8; 64]> for BmpOs22xHeader {
-  type Error = ();
-  fn try_from(a: [u8; 64]) -> Result<Self, Self::Error> {
-    if u32::from_le_bytes(a[0..4].try_into().unwrap()) != 40 {
-      return Err(());
-    }
-    if u16::from_le_bytes(a[12..14].try_into().unwrap()) != 1 {
-      return Err(());
-    }
-    // resolution units
-    // pixel_direction
-    // color_table_encoding
-    todo!()
-  }
-}
-
-/*
-Bitmap info header vN:
-
-// v1
-uint32 biSize;
-int32 biWidth;
-int32 biHeight;
-uint16 biPlanes;
-uint16 biBitCount;
-uint32 biCompression;
-uint32 biSizeImage;
-uint32 biXPixelsPerMeter;
-uint32 biYPixelsPerMeter;
-uint32 biClrUsed;
-uint32 biClrImportant;
-
-// new v2
-uint32 biRedMask;
-uint32 biGreenMask;
-uint32 biBlueMask;
-
-// new  v3
-uint32 biAlphaMask;
-
-// new v4
-DWORD        bV4CSType;
-CIEXYZTRIPLE bV4Endpoints;
-DWORD        bV4GammaRed;
-DWORD        bV4GammaGreen;
-DWORD        bV4GammaBlue;
-
-// new v5
-DWORD        bV5Intent;
-DWORD        bV5ProfileData;
-DWORD        bV5ProfileSize;
-DWORD        bV5Reserved;
-*/
-
-/*
-Extra Bit Masks
-*/
-
-/*
-Color Table
-*/
-
-/*
-Gap1
-*/
-
-/*
-Pixel Array
-*/
-
-/*
-Gap2
-*/
-
-/*
-ICC Color Profile
-*/

@@ -1,4 +1,6 @@
-use imagine::{png::*, RGB16_BE, RGB8, RGBA16_BE, RGBA8, Y16_BE, YA16_BE, YA8};
+use std::{ffi::OsStr, mem::size_of};
+
+use imagine::{bmp::*, png::*, RGB16_BE, RGB8, RGBA16_BE, RGBA8, Y16_BE, YA16_BE, YA8};
 use pixels::{wgpu::Color, Error, Pixels, SurfaceTexture};
 use winit::{
   dpi::LogicalSize,
@@ -60,13 +62,30 @@ fn main() -> Result<(), Error> {
         }
       };
 
-      let (new_rgba8, width, height) = match parse_me_a_png_yo(&file_bytes) {
-        Ok((rgba8, width, height)) => (rgba8, width, height),
-        Err(e) => {
-          eprintln!("Err parsing `{path_buf}`: {e:?}", path_buf = path_buf.display(), e = e);
-          return;
-        }
-      };
+      let (new_rgba8, width, height) =
+        match path_buf.extension().and_then(OsStr::to_str).unwrap_or_default() {
+          "png" => match parse_me_a_png_yo(&file_bytes) {
+            Ok((rgba8, width, height)) => (rgba8, width, height),
+            Err(e) => {
+              eprintln!("Err parsing `{path_buf}`: {e:?}", path_buf = path_buf.display(), e = e);
+              return;
+            }
+          },
+          "bmp" => match parse_me_a_bmp_yo(&file_bytes) {
+            Ok((rgba8, width, height)) => (rgba8, width, height),
+            Err(e) => {
+              eprintln!("Err parsing `{path_buf}`: {e:?}", path_buf = path_buf.display(), e = e);
+              return;
+            }
+          },
+          _ => {
+            eprintln!(
+              "File `{path_buf}` has an unsupported file extension.",
+              path_buf = path_buf.display()
+            );
+            return;
+          }
+        };
 
       rgba8 = new_rgba8;
       let size = LogicalSize::new(width as f64, height as f64);
@@ -307,4 +326,67 @@ fn rgba16_be_to_rgba8(rgba16_be: RGBA16_BE) -> RGBA8 {
 
 fn rgb16_be_to_rgba8(rgb16_be: RGB16_BE) -> RGBA8 {
   RGBA8 { r: rgb16_be.r[0], g: rgb16_be.g[0], b: rgb16_be.b[0], a: 0xFF }
+}
+
+// TODO: when we move the bmp parsing into the crate itself, delete this extra
+// copy of this function.
+pub fn try_split_off_byte_array<const N: usize>(bytes: &[u8]) -> Option<([u8; N], &[u8])> {
+  if bytes.len() >= N {
+    let (head, tail) = bytes.split_at(N);
+    let a: [u8; N] = head.try_into().unwrap();
+    Some((a, tail))
+  } else {
+    None
+  }
+}
+
+fn parse_me_a_bmp_yo(bmp: &[u8]) -> Result<(Vec<RGBA8>, u32, u32), BmpError> {
+  println!("== Parsing a BMP...");
+
+  let (file_header, rest) = BmpFileHeader::try_from_bytes(bmp)?;
+  println!("file_header: {:?}", file_header);
+  if file_header.total_file_size as usize != bmp.len()
+    || !(COMMON_BMP_TAGS.contains(&file_header.tag))
+  {
+    println!("actual size: {}", bmp.len());
+    return Err(BmpError::ThisIsProbablyNotABmpFile);
+  }
+
+  let (info_header, mut rest) = BmpInfoHeader::try_from_bytes(rest)?;
+  println!("info_header: {info_header:?}", info_header = info_header);
+
+  let [r_mask, g_mask, b_mask, a_mask] = match info_header.compression() {
+    BmpCompression::Bitfields => {
+      let (a, new_rest) = try_split_off_byte_array::<{ size_of::<u32>() * 3 }>(rest)
+        .ok_or(BmpError::InsufficientBytes)?;
+      rest = new_rest;
+      [
+        u32::from_le_bytes(a[0..4].try_into().unwrap()),
+        u32::from_le_bytes(a[4..8].try_into().unwrap()),
+        u32::from_le_bytes(a[8..12].try_into().unwrap()),
+        0,
+      ]
+    }
+    BmpCompression::AlphaBitfields => {
+      let (a, new_rest) = try_split_off_byte_array::<{ size_of::<u32>() * 4 }>(rest)
+        .ok_or(BmpError::InsufficientBytes)?;
+      rest = new_rest;
+      [
+        u32::from_le_bytes(a[0..4].try_into().unwrap()),
+        u32::from_le_bytes(a[4..8].try_into().unwrap()),
+        u32::from_le_bytes(a[8..12].try_into().unwrap()),
+        u32::from_le_bytes(a[12..16].try_into().unwrap()),
+      ]
+    }
+    _ => [0, 0, 0, 0],
+  };
+  println!(
+    "bitmasks: [\n  r:{r_mask:032b}\n  g:{g_mask:032b}\n  b:{b_mask:032b}\n  a:{a_mask:032b}\n]",
+    r_mask = r_mask,
+    g_mask = g_mask,
+    b_mask = b_mask,
+    a_mask = a_mask
+  );
+
+  Err(BmpError::ParserIncomplete)
 }
