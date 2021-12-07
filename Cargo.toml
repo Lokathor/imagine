@@ -12,8 +12,9 @@ bytemuck = "1"
 miniz_oxide = { version = "0.5", default-features = false, optional = true }
 
 [features]
-default = ["png", "bmp"]
+default = []
 alloc = []
+all-formats = ["png", "bmp"]
 png = ["miniz_oxide"]
 bmp = []
 
@@ -25,3 +26,10 @@ winit = "0.25"
 [[example]]
 name = "demo"
 required-features = ["alloc"]
+
+[package.metadata.docs.rs]
+rustdoc-args = ["--cfg","docs_rs"]
+features = [
+  "alloc",
+  "all-formats",
+]

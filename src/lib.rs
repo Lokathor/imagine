@@ -1,4 +1,5 @@
 #![no_std]
+#![cfg_attr(docs_rs, feature(doc_cfg))]
 //#![warn(missing_docs)]
 #![allow(unused_imports)]
 //
