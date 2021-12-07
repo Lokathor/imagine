@@ -68,6 +68,7 @@ pub enum BmpError {
   IllegalBitDepth,
   AllocError,
   PixelDataIllegalLength,
+  PixelDataIllegalRLEContent,
   /// The BMP file might be valid, but either way this library doesn't currently
   /// know how to parse it.
   ParserIncomplete,

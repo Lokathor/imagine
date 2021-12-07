@@ -365,9 +365,6 @@ fn parse_me_a_bmp_yo(bmp: &[u8]) -> Result<(Vec<RGBA8>, u32, u32), BmpError> {
   let width: usize = info_header.width().unsigned_abs() as usize;
   let height: usize = info_header.height().unsigned_abs() as usize;
   let pixel_count: usize = width.saturating_mul(height);
-  let mut final_storage: Vec<RGBA8> = Vec::new();
-  final_storage.try_reserve(pixel_count).map_err(|_| BmpError::AllocError)?;
-  final_storage.resize(pixel_count, RGBA8::default());
 
   let [r_mask, g_mask, b_mask, a_mask] = match compression {
     BmpCompression::Bitfields => {
@@ -406,6 +403,19 @@ fn parse_me_a_bmp_yo(bmp: &[u8]) -> Result<(Vec<RGBA8>, u32, u32), BmpError> {
     g_mask = g_mask,
     b_mask = b_mask,
     a_mask = a_mask
+  );
+
+  // we make our final storage once we know about the masks. if there is a
+  // non-zero alpha mask then we assume the image is alpha aware and pixels
+  // default to transparent black. otherwise we assume that the image doesn't
+  // know about alpha and use opaque black as the default. This is significant
+  // because the RLE compresions can skip touching some pixels entirely and just
+  // leave the default color in place.
+  let mut final_storage: Vec<RGBA8> = Vec::new();
+  final_storage.try_reserve(pixel_count).map_err(|_| BmpError::AllocError)?;
+  final_storage.resize(
+    pixel_count,
+    if a_mask != 0 { RGBA8::default() } else { RGBA8 { r: 0, g: 0, b: 0, a: 0xFF } },
   );
 
   #[allow(unused_assignments)]
@@ -536,7 +546,7 @@ fn parse_me_a_bmp_yo(bmp: &[u8]) -> Result<(Vec<RGBA8>, u32, u32), BmpError> {
                   .enumerate()
               {
                 let rgba8 = RGBA8 { r, g, b, a: 0xFF };
-                final_storage[(y * width + x) as usize] = rgba8;
+                final_storage[y * width + x] = rgba8;
               }
             }
           };
@@ -619,10 +629,218 @@ fn parse_me_a_bmp_yo(bmp: &[u8]) -> Result<(Vec<RGBA8>, u32, u32), BmpError> {
         _ => return Err(BmpError::IllegalBitDepth),
       }
     }
-    // TODO: implement this, the explanation of how this works is here:
-    // https://docs.microsoft.com/en-us/windows/win32/gdi/bitmap-compression
-    BmpCompression::RgbRLE4 => return Err(BmpError::ParserIncomplete),
-    BmpCompression::RgbRLE8 => return Err(BmpError::ParserIncomplete),
+    BmpCompression::RgbRLE8 => {
+      // For the RLE encodings, there's either "encoded" pairs of bytes, or
+      // "absolute" runs of bytes that are also always even in length (with a
+      // padding byte if necessary). Thus, no matter what, the number of bytes
+      // in the pixel data should always be even when we're processing RLE data.
+      if pixel_data.len() % 2 != 0 {
+        return Err(BmpError::PixelDataIllegalLength);
+      }
+      let mut it = cast_slice::<u8, [u8; 2]>(pixel_data).iter().copied();
+      // Now the MSDN docs get kinda terrible. They talk about "encoded" and
+      // "absolute" mode, but whoever wrote that is bad at writing docs. What
+      // we're doing is we'll pull off two bytes at a time from the pixel data.
+      // Then we look at the first byte in a pair and see if it's zero or not.
+      //
+      // * If the first byte is **non-zero** it's the number of times that the second
+      //   byte appears in the output. The second byte is an index into the palette,
+      //   and you just put out that color and output it into the bitmap however many
+      //   times.
+      // * If the first byte is **zero**, it signals an "escape sequence" sort of
+      //   situation. The second byte will give us the details:
+      //   * 0: end of line
+      //   * 1: end of bitmap
+      //   * 2: "Delta", the *next* two bytes after this are unsigned offsets to the
+      //     right and up of where the output should move to (remember that this mode
+      //     always describes the BMP with a bottom-left origin).
+      //   * 3+: "Absolute", The second byte gives a count of how many bytes follow
+      //     that we'll output without repetition. The absolute output sequences
+      //     always have a padding byte on the ending if the sequence count is odd, so
+      //     we can keep pulling `[u8;2]` at a time from our data and it all works.
+      let mut x = 0;
+      let mut y = height - 1;
+      'iter_pull_rle8: while let Some([count, pal_index]) = it.next() {
+        if count > 0 {
+          // data run of the `pal_index` value's color.
+          let rgba8 = palette.get(pal_index as usize).copied().unwrap_or_default();
+          let count = count as usize;
+          let i = y * width + x;
+          let target_slice_mut: &mut [RGBA8] = if i + count <= final_storage.len() {
+            &mut final_storage[i..(i + count)]
+          } else {
+            // this probably means the data was encoded wrong? We'll still fill
+            // in some of the pixels at least, and if people can find a
+            // counter-example we can fix this.
+            &mut final_storage[i..]
+          };
+          target_slice_mut.iter_mut().for_each(|c| *c = rgba8);
+          x += count;
+        } else {
+          match pal_index {
+            0 => {
+              // end of line.
+              x = 0;
+              y = y.saturating_sub(1);
+            }
+            1 => {
+              // end of bitmap
+              break 'iter_pull_rle8;
+            }
+            2 => {
+              // position delta
+              if let Some([d_right, d_up]) = it.next() {
+                x += d_right as usize;
+                y = y.saturating_sub(d_up as usize);
+              } else {
+                return Err(BmpError::PixelDataIllegalRLEContent);
+              }
+            }
+            mut raw_count => {
+              while raw_count > 0 {
+                // process two bytes at a time, which we'll call `q` and `w` for
+                // lack of better names.
+                if let Some([q, w]) = it.next() {
+                  // q byte
+                  let rgba8 = palette.get(q as usize).copied().unwrap_or_default();
+                  let i = y * width + x;
+                  // If this goes OOB then that's the fault of the encoder and
+                  // it's better to just drop some data than to panic.
+                  final_storage.get_mut(i).map(|c| *c = rgba8);
+                  x += 1;
+
+                  // If `raw_count` is only 1 then we don't output the `w` byte.
+                  if raw_count >= 2 {
+                    // w byte
+                    let rgba8 = palette.get(w as usize).copied().unwrap_or_default();
+                    let i = y * width + x;
+                    final_storage.get_mut(i).map(|c| *c = rgba8);
+                    x += 1;
+                  }
+                } else {
+                  return Err(BmpError::PixelDataIllegalRLEContent);
+                }
+                //
+                raw_count = raw_count.saturating_sub(2);
+              }
+            }
+          }
+        }
+      }
+    }
+    BmpCompression::RgbRLE4 => {
+      // RLE4 works *basically* how RLE8 does, except that every time we
+      // process a byte as a color to output then it's actually two outputs
+      // instead (upper bits then lower bits). The stuff about the escape
+      // sequences and all that is still the same sort of thing.
+      if pixel_data.len() % 2 != 0 {
+        return Err(BmpError::PixelDataIllegalLength);
+      }
+      let mut it = cast_slice::<u8, [u8; 2]>(pixel_data).iter().copied();
+      //
+      let mut x = 0;
+      let mut y = height - 1;
+      //
+      'iter_pull_rle4: while let Some([count, pal_index]) = it.next() {
+        if count > 0 {
+          // in this case, `count` is the number of indexes to output, and
+          // `pal_index` is *two* pixel indexes (high bits then low bits). We'll
+          // write the pair of them over and over in a loop however many times.
+          if (pal_index >> 4) as usize >= palette.len() {
+            println!("pal_index high bits oob: {} of {}", (pal_index >> 4), palette.len());
+          }
+          if (pal_index & 0b1111) as usize >= palette.len() {
+            println!(
+              "pal_index high bits oob: {} of {}",
+              (pal_index & 0b1111) as usize,
+              palette.len()
+            );
+          }
+          let rgba8_h = palette.get((pal_index >> 4) as usize).copied().unwrap_or_default();
+          let rgba8_l = palette.get((pal_index & 0b1111) as usize).copied().unwrap_or_default();
+          let count = count as usize;
+          debug_assert!(x < width, "x:{}, width:{}", x, width);
+          debug_assert!(y < height, "y:{}, height:{}", y, height);
+          let i = y * width + x;
+          let target_slice_mut: &mut [RGBA8] = if i + count < final_storage.len() {
+            &mut final_storage[i..(i + count)]
+          } else {
+            // this probably means the data was encoded wrong? We'll still fill
+            // in some of the pixels at least, and if people can find a
+            // counter-example we can fix this.
+            &mut final_storage[i..]
+          };
+          let mut chunks_exact_mut = target_slice_mut.chunks_exact_mut(2);
+          while let Some(chunk) = chunks_exact_mut.next() {
+            chunk[0] = rgba8_h;
+            chunk[1] = rgba8_l;
+          }
+          chunks_exact_mut.into_remainder().iter_mut().for_each(|c| {
+            *c = rgba8_h;
+          });
+          x += count;
+        } else {
+          // If the count is zero then we use the same escape sequence scheme as
+          // with the RLE8 format.
+          match pal_index {
+            0 => {
+              // end of line.
+              //print!("RLE4: == END OF LINE: before (x: {}, y: {})", x, y);
+              x = 0;
+              y = y.saturating_sub(1);
+              //println!(" after (x: {}, y: {})", x, y);
+            }
+            1 => {
+              // end of bitmap
+              //println!("RLE4: ==>> END OF THE BITMAP");
+              break 'iter_pull_rle4;
+            }
+            2 => {
+              // delta
+              if let Some([d_right, d_up]) = it.next() {
+                x += d_right as usize;
+                y = y.saturating_sub(d_up as usize);
+              } else {
+                return Err(BmpError::PixelDataIllegalRLEContent);
+              }
+            }
+            mut raw_count => {
+              // in this case, we'll still have raw outputs for a sequence, but
+              // `raw_count` is the number of indexes, and each 2 bytes in the
+              // sequence is **four** output indexes. The only complication is
+              // that we need to be sure we stop *as soon* as `raw_count` hits 0
+              // because otherwise we'll mess up our `x` position (ruining all
+              // future outputs on this scanline, and possibly ruining other
+              // scanlines or something).
+              while raw_count > 0 {
+                if let Some([q, w]) = it.next() {
+                  for pal_index in [
+                    ((q >> 4) as usize),
+                    ((q & 0b1111) as usize),
+                    ((w >> 4) as usize),
+                    ((w & 0b1111) as usize),
+                  ] {
+                    let i = y * width + x;
+                    if pal_index >= palette.len() {
+                      println!("oob pal_index: {} of {}", pal_index, palette.len());
+                    }
+                    let rgba8_h = palette.get(pal_index).copied().unwrap_or_default();
+                    final_storage.get_mut(i).map(|c| *c = rgba8_h);
+                    x += 1;
+                    raw_count = raw_count.saturating_sub(1);
+                    if raw_count == 0 {
+                      break;
+                    }
+                  }
+                } else {
+                  return Err(BmpError::PixelDataIllegalRLEContent);
+                }
+              }
+            }
+          }
+        }
+      }
+    }
     // Note(Lokathor): Uh, I guess "the entire file is inside the 'pixel_array'
     // data" or whatever? We need example files that use this compression before
     // we can begin to check out what's going on here.

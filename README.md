@@ -4,21 +4,27 @@
 
 # imagine
 
-Project Goals:
+## Goals
 
 * To provide image format **decoders** for various image formats:
-  * Decoders should be *possible* to use without the library doing any allocation
+  * Decoders should be *possible* to use without `imagine` doing any allocation
     (the user provides any necessary buffers).
-  * Decoders should be *simple* to use when the library is allowed to allocate
-    for you. Functions to "just get me the RGBA8 pixels", and things like that.
+  * Decoders should be *simple* to use when `imagine` is allowed to allocate for
+    you. Functions to "just get me the RGBA8 pixels", and things like that.
 * To provide image format **encoders** for various image formats:
   * Depending on format, a low-compression or no-compression encoder will likely
-    be available even without the library being allowed to allocate.
-  * Depending on format, a good compressor will be available when the library is
+    be available even without `imagine` being allowed to allocate.
+  * Depending on format, a good compressor will be available when `imagine` is
     allowed to allocate.
 
-Project Status:
+## Status
 
-* `png` can be decoded properly without allocating. The "simple" API for doing
-  so is not yet developed. See the `demo` example for how to do it yourself.
-* Changes are expected to break things in upcoming versions!
+* `png` and `bmp` can both be decoded properly without `imagine` allocating. The
+  "simple" API for doing so is not yet developed. This means that currently you
+  need quite a bit of knowledge about the details of each format to actually
+  decode an image. See the `demo` example if you want to try and understand how
+  things work (though the `demo` doesn't yet handle all cases either...).
+* Changes are expected to break things in upcoming versions! We're `0.0.z` for a
+  reason.
+
+There's many places for improvement, file PRs if you like!
