@@ -1,6 +1,6 @@
 use bytemuck::cast_slice;
 
-use crate::{pixel_formats::RGB8, RGB16_BE, Y16_BE, Y8};
+use crate::{pixel_formats::RGB8, SrgbIntent, RGB16_BE, Y16_BE, Y8};
 
 use super::*;
 
@@ -132,10 +132,10 @@ impl<'b> TryFrom<RawPngChunk<'b>> for PngChunk<'b> {
       },
       b"sRGB" => PngChunk::sRGB(sRGB {
         intent: match data {
-          [0] => PngSrgbIntent::Perceptual,
-          [1] => PngSrgbIntent::RelativeColorimetric,
-          [2] => PngSrgbIntent::Saturation,
-          [4] => PngSrgbIntent::AbsoluteColorimetric,
+          [0] => SrgbIntent::Perceptual,
+          [1] => SrgbIntent::RelativeColorimetric,
+          [2] => SrgbIntent::Saturation,
+          [4] => SrgbIntent::AbsoluteColorimetric,
           _ => return Err(Illegal_sRGB),
         },
       }),
@@ -773,24 +773,6 @@ pub enum sBIT {
   RGBA { r: u8, g: u8, b: u8, a: u8 },
 }
 
-/// Used by [`sRGB`] chunks.
-#[derive(Debug, Clone, Copy)]
-#[allow(missing_docs)]
-pub enum PngSrgbIntent {
-  /// for images preferring good adaptation to the output device gamut at the
-  /// expense of colorimetric accuracy, such as photographs.
-  Perceptual = 0,
-  /// for images requiring colour appearance matching (relative to the output
-  /// device white point), such as logos.
-  RelativeColorimetric = 1,
-  /// for images preferring preservation of saturation at the expense of hue and
-  /// lightness, such as charts and graphs.
-  Saturation = 2,
-  /// for images requiring preservation of absolute colorimetry, such as
-  /// previews of images destined for a different output device (proofs).
-  AbsoluteColorimetric = 4,
-}
-
 /// `sRGB`: Standard RGB colour space.
 ///
 /// If the `sRGB` chunk is present, the image samples conform to the
@@ -803,7 +785,7 @@ pub enum PngSrgbIntent {
 #[derive(Debug, Clone, Copy)]
 #[allow(missing_docs)]
 pub struct sRGB {
-  pub intent: PngSrgbIntent,
+  pub intent: SrgbIntent,
 }
 
 /// `tEXt`: Textual data.
