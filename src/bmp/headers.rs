@@ -128,38 +128,43 @@ impl BmpInfoHeader {
   pub const fn width(self) -> i32 {
     match self {
       Self::Core(BmpInfoHeaderCore { width, .. }) => width as i32,
-      Self::Os22x(BmpInfoHeaderOs22x { width, .. }) => width,
-      Self::V1(BmpInfoHeaderV1 { width, .. }) => width,
-      Self::V2(BmpInfoHeaderV2 { width, .. }) => width,
-      Self::V3(BmpInfoHeaderV3 { width, .. }) => width,
-      Self::V4(BmpInfoHeaderV4 { width, .. }) => width,
-      Self::V5(BmpInfoHeaderV5 { width, .. }) => width,
+      Self::Os22x(BmpInfoHeaderOs22x { width, .. })
+      | Self::V1(BmpInfoHeaderV1 { width, .. })
+      | Self::V2(BmpInfoHeaderV2 { width, .. })
+      | Self::V3(BmpInfoHeaderV3 { width, .. })
+      | Self::V4(BmpInfoHeaderV4 { width, .. })
+      | Self::V5(BmpInfoHeaderV5 { width, .. }) => width,
     }
   }
+
+  /// Image pixel height.
+  ///
+  /// * A positive height indicates that the origin is the **bottom** left.
+  /// * A negative height indicates that the image origin is the **top** left.
   #[inline]
   #[must_use]
   pub const fn height(self) -> i32 {
     match self {
       Self::Core(BmpInfoHeaderCore { height, .. }) => height as i32,
-      Self::Os22x(BmpInfoHeaderOs22x { height, .. }) => height,
-      Self::V1(BmpInfoHeaderV1 { height, .. }) => height,
-      Self::V2(BmpInfoHeaderV2 { height, .. }) => height,
-      Self::V3(BmpInfoHeaderV3 { height, .. }) => height,
-      Self::V4(BmpInfoHeaderV4 { height, .. }) => height,
-      Self::V5(BmpInfoHeaderV5 { height, .. }) => height,
+      Self::Os22x(BmpInfoHeaderOs22x { height, .. })
+      | Self::V1(BmpInfoHeaderV1 { height, .. })
+      | Self::V2(BmpInfoHeaderV2 { height, .. })
+      | Self::V3(BmpInfoHeaderV3 { height, .. })
+      | Self::V4(BmpInfoHeaderV4 { height, .. })
+      | Self::V5(BmpInfoHeaderV5 { height, .. }) => height,
     }
   }
   #[inline]
   #[must_use]
   pub const fn bits_per_pixel(self) -> u16 {
     match self {
-      Self::Core(BmpInfoHeaderCore { bits_per_pixel, .. }) => bits_per_pixel,
-      Self::Os22x(BmpInfoHeaderOs22x { bits_per_pixel, .. }) => bits_per_pixel,
-      Self::V1(BmpInfoHeaderV1 { bits_per_pixel, .. }) => bits_per_pixel,
-      Self::V2(BmpInfoHeaderV2 { bits_per_pixel, .. }) => bits_per_pixel,
-      Self::V3(BmpInfoHeaderV3 { bits_per_pixel, .. }) => bits_per_pixel,
-      Self::V4(BmpInfoHeaderV4 { bits_per_pixel, .. }) => bits_per_pixel,
-      Self::V5(BmpInfoHeaderV5 { bits_per_pixel, .. }) => bits_per_pixel,
+      Self::Core(BmpInfoHeaderCore { bits_per_pixel, .. })
+      | Self::Os22x(BmpInfoHeaderOs22x { bits_per_pixel, .. })
+      | Self::V1(BmpInfoHeaderV1 { bits_per_pixel, .. })
+      | Self::V2(BmpInfoHeaderV2 { bits_per_pixel, .. })
+      | Self::V3(BmpInfoHeaderV3 { bits_per_pixel, .. })
+      | Self::V4(BmpInfoHeaderV4 { bits_per_pixel, .. })
+      | Self::V5(BmpInfoHeaderV5 { bits_per_pixel, .. }) => bits_per_pixel,
     }
   }
   #[inline]
@@ -167,12 +172,60 @@ impl BmpInfoHeader {
   pub const fn compression(self) -> BmpCompression {
     match self {
       Self::Core(BmpInfoHeaderCore { .. }) => BmpCompression::RgbNoCompression,
-      Self::Os22x(BmpInfoHeaderOs22x { compression, .. }) => compression,
-      Self::V1(BmpInfoHeaderV1 { compression, .. }) => compression,
-      Self::V2(BmpInfoHeaderV2 { compression, .. }) => compression,
-      Self::V3(BmpInfoHeaderV3 { compression, .. }) => compression,
-      Self::V4(BmpInfoHeaderV4 { compression, .. }) => compression,
-      Self::V5(BmpInfoHeaderV5 { compression, .. }) => compression,
+      Self::Os22x(BmpInfoHeaderOs22x { compression, .. })
+      | Self::V1(BmpInfoHeaderV1 { compression, .. })
+      | Self::V2(BmpInfoHeaderV2 { compression, .. })
+      | Self::V3(BmpInfoHeaderV3 { compression, .. })
+      | Self::V4(BmpInfoHeaderV4 { compression, .. })
+      | Self::V5(BmpInfoHeaderV5 { compression, .. }) => compression,
+    }
+  }
+  /// Gets the number of palette entries.
+  ///
+  /// Meaning of a `None` value for the `palette_len` field changes depending on
+  /// the bit depth of the image, so this method handles that difference for you
+  /// and just gives you a single `u32` that's the *actual* number of entries on
+  /// the palette.
+  #[inline]
+  #[must_use]
+  pub const fn palette_len(self) -> usize {
+    match self {
+      Self::Core(BmpInfoHeaderCore { bits_per_pixel, .. }) => (1 << bits_per_pixel),
+      Self::Os22x(x) => x.palette_len(),
+      Self::V1(x) => x.palette_len(),
+      Self::V2(x) => x.palette_len(),
+      Self::V3(x) => x.palette_len(),
+      Self::V4(x) => x.palette_len(),
+      Self::V5(x) => x.palette_len(),
+    }
+  }
+  /// Gets the number of bytes in the pixel data region of the file.
+  #[inline]
+  #[must_use]
+  pub const fn pixel_data_len(self) -> usize {
+    match self {
+      Self::Core(BmpInfoHeaderCore { .. }) => {
+        self.width().unsigned_abs().saturating_mul(self.height().unsigned_abs()) as usize
+      }
+      Self::Os22x(BmpInfoHeaderOs22x { image_byte_size, .. })
+      | Self::V1(BmpInfoHeaderV1 { image_byte_size, .. })
+      | Self::V2(BmpInfoHeaderV2 { image_byte_size, .. })
+      | Self::V3(BmpInfoHeaderV3 { image_byte_size, .. })
+      | Self::V4(BmpInfoHeaderV4 { image_byte_size, .. })
+      | Self::V5(BmpInfoHeaderV5 { image_byte_size, .. }) => match image_byte_size {
+        Some(x) => x.get() as usize,
+        None => {
+          let width_u = self.width().unsigned_abs() as usize;
+          let height_u = self.height().unsigned_abs() as usize;
+          let bits_per_line = width_u.saturating_mul(self.bits_per_pixel() as usize);
+          let bytes_per_line_no_padding =
+            (bits_per_line / 8) + (((bits_per_line % 8) != 0) as usize);
+          let bytes_per_line_padded = ((bytes_per_line_no_padding / 4)
+            + (((bytes_per_line_no_padding % 4) != 0) as usize))
+            .saturating_mul(4);
+          height_u.saturating_mul(bytes_per_line_padded)
+        }
+      },
     }
   }
 }
@@ -409,6 +462,22 @@ impl From<BmpInfoHeaderV1> for [u8; 40] {
     a
   }
 }
+impl BmpInfoHeaderV1 {
+  #[inline]
+  #[must_use]
+  pub const fn palette_len(self) -> usize {
+    match self.palette_len {
+      Some(nzu32) => nzu32.get() as usize,
+      None => {
+        if self.bits_per_pixel <= 8 {
+          1 << self.bits_per_pixel
+        } else {
+          0
+        }
+      }
+    }
+  }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Halftoning {
@@ -510,8 +579,9 @@ pub struct BmpInfoHeaderOs22x {
 
   /// Palette length.
   ///
-  /// A value of `None` indicates that the full `2**N` palette is used (where
-  /// `N` is the image bit depth).
+  /// If the bit depth requires a palette and it's `None` that indicates that
+  /// the full `2**N` palette is used (where `N` is the image bit depth).
+  /// Otherwise, `None` indicates no palette.
   pub palette_len: Option<NonZeroU32>,
 
   /// The number of "important" colors.
@@ -628,6 +698,22 @@ impl From<BmpInfoHeaderOs22x> for [u8; 64] {
     a[56..60].copy_from_slice(cast::<_,u32>(h.color_table_format).to_le_bytes().as_slice());
     // 4 bytes padding
     a
+  }
+}
+impl BmpInfoHeaderOs22x {
+  #[inline]
+  #[must_use]
+  pub const fn palette_len(self) -> usize {
+    match self.palette_len {
+      Some(nzu32) => nzu32.get() as usize,
+      None => {
+        if self.bits_per_pixel <= 8 {
+          1 << self.bits_per_pixel
+        } else {
+          0
+        }
+      }
+    }
   }
 }
 
@@ -749,6 +835,22 @@ impl From<BmpInfoHeaderV2> for [u8; 52] {
     a[44..48].copy_from_slice(h.green_mask.to_le_bytes().as_slice());
     a[48..52].copy_from_slice(h.blue_mask.to_le_bytes().as_slice());
     a
+  }
+}
+impl BmpInfoHeaderV2 {
+  #[inline]
+  #[must_use]
+  pub const fn palette_len(self) -> usize {
+    match self.palette_len {
+      Some(nzu32) => nzu32.get() as usize,
+      None => {
+        if self.bits_per_pixel <= 8 {
+          1 << self.bits_per_pixel
+        } else {
+          0
+        }
+      }
+    }
   }
 }
 
@@ -876,6 +978,22 @@ impl From<BmpInfoHeaderV3> for [u8; 56] {
     a[48..52].copy_from_slice(h.blue_mask.to_le_bytes().as_slice());
     a[52..56].copy_from_slice(h.alpha_mask.to_le_bytes().as_slice());
     a
+  }
+}
+impl BmpInfoHeaderV3 {
+  #[inline]
+  #[must_use]
+  pub const fn palette_len(self) -> usize {
+    match self.palette_len {
+      Some(nzu32) => nzu32.get() as usize,
+      None => {
+        if self.bits_per_pixel <= 8 {
+          1 << self.bits_per_pixel
+        } else {
+          0
+        }
+      }
+    }
   }
 }
 
@@ -1149,6 +1267,22 @@ impl From<BmpInfoHeaderV4> for [u8; 108] {
     a
   }
 }
+impl BmpInfoHeaderV4 {
+  #[inline]
+  #[must_use]
+  pub const fn palette_len(self) -> usize {
+    match self.palette_len {
+      Some(nzu32) => nzu32.get() as usize,
+      None => {
+        if self.bits_per_pixel <= 8 {
+          1 << self.bits_per_pixel
+        } else {
+          0
+        }
+      }
+    }
+  }
+}
 
 /// InfoHeader version 5.
 ///
@@ -1342,5 +1476,21 @@ impl From<BmpInfoHeaderV5> for [u8; 124] {
     a[116..120].copy_from_slice(h.embedded_profile_size.to_le_bytes().as_slice());
     // 4 bytes left blank
     a
+  }
+}
+impl BmpInfoHeaderV5 {
+  #[inline]
+  #[must_use]
+  pub const fn palette_len(self) -> usize {
+    match self.palette_len {
+      Some(nzu32) => nzu32.get() as usize,
+      None => {
+        if self.bits_per_pixel <= 8 {
+          1 << self.bits_per_pixel
+        } else {
+          0
+        }
+      }
+    }
   }
 }

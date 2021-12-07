@@ -21,17 +21,16 @@
 //!   that specify the bit regions for the R, G, B, and possibly A data. These
 //!   compression formats should only appear with 16 or 32 bpp images.
 //! * Next there **might** be a color table. This is mandatory if the bit depth
-//!   is 8 (or less) bits per pixel, and it's optional otherwise. The default
-//!   number of entries is `2**bits_per_pixel`, though most header formats can
-//!   optionally specify a smaller color table. Each entry in the color table is
-//!   generally a `[u8;4]` value (`[b, g, r, 0]`), except if `BmpInfoHeaderCore`
-//!   is used, in which case each entry is a `[u8;3]` value (`[b,g,r]`). There's
-//!   apparently a 2 byte per entry form (indexing into the current system
-//!   palette) that's supposed to only be used while the image is in memory on
-//!   older systems, so you shouldn't find it in files. If the image supports
-//!   alpha, then the color table might contain non-zero alpha values. If all
-//!   alpha values in the color table are 0 you should assume that the color
-//!   table colors are intended to be fully opaque.
+//!   is 8 (or less) bits per pixel (and `None` indicates `2**bits_per_pixel`
+//!   entries), and otherwise it just suggests the colors that a limited-color
+//!   display might want to favor (and `None` indicates 0 entries). Each entry
+//!   in the color table is generally a `[u8;4]` value (`[r, g, b, a]`),
+//!   **except** if `BmpInfoHeaderCore` is used, in which case each entry is a
+//!   `[u8;3]` value (`[r, g, b]`). Usually all alpha values in the color table
+//!   will be 0, the values are only 4 bytes each for alignment, but all colors
+//!   are still supposed to be opaque (make appropriate adjustments). If a
+//!   non-zero alpha value is found in the palette then the palette is probably
+//!   alpha aware, and you should leave the alpha channels alone.
 //! * Next there **might** be a gap in the data. This allows the pixel data to
 //!   be re-aligned to 4 (if necessary), though this assumes that the file
 //!   itself was loaded into memory at an alignment of at least 4. The offset of
@@ -66,6 +65,9 @@ pub enum BmpError {
   IncorrectSizeForThisInfoHeaderVersion,
   UnknownCompression,
   UnknownHeaderLength,
+  IllegalBitDepth,
+  AllocError,
+  PixelDataIllegalLength,
   /// The BMP file might be valid, but either way this library doesn't currently
   /// know how to parse it.
   ParserIncomplete,

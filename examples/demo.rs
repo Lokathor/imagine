@@ -1,5 +1,6 @@
 use std::{ffi::OsStr, mem::size_of};
 
+use bytemuck::cast_slice;
 use imagine::{bmp::*, png::*, RGB16_BE, RGB8, RGBA16_BE, RGBA8, Y16_BE, YA16_BE, YA8};
 use pixels::{wgpu::Color, Error, Pixels, SurfaceTexture};
 use winit::{
@@ -86,6 +87,11 @@ fn main() -> Result<(), Error> {
             return;
           }
         };
+
+      if width > 32768 || height > 32768 {
+        println!("new image dimensions ({}, {}) are too large!", width, height);
+        return;
+      }
 
       rgba8 = new_rgba8;
       let size = LogicalSize::new(width as f64, height as f64);
@@ -354,8 +360,16 @@ fn parse_me_a_bmp_yo(bmp: &[u8]) -> Result<(Vec<RGBA8>, u32, u32), BmpError> {
 
   let (info_header, mut rest) = BmpInfoHeader::try_from_bytes(rest)?;
   println!("info_header: {info_header:?}", info_header = info_header);
+  let compression = info_header.compression();
+  let bits_per_pixel = info_header.bits_per_pixel() as usize;
+  let width: usize = info_header.width().unsigned_abs() as usize;
+  let height: usize = info_header.height().unsigned_abs() as usize;
+  let pixel_count: usize = width.saturating_mul(height);
+  let mut final_storage: Vec<RGBA8> = Vec::new();
+  final_storage.try_reserve(pixel_count).map_err(|_| BmpError::AllocError)?;
+  final_storage.resize(pixel_count, RGBA8::default());
 
-  let [r_mask, g_mask, b_mask, a_mask] = match info_header.compression() {
+  let [r_mask, g_mask, b_mask, a_mask] = match compression {
     BmpCompression::Bitfields => {
       let (a, new_rest) = try_split_off_byte_array::<{ size_of::<u32>() * 3 }>(rest)
         .ok_or(BmpError::InsufficientBytes)?;
@@ -378,7 +392,13 @@ fn parse_me_a_bmp_yo(bmp: &[u8]) -> Result<(Vec<RGBA8>, u32, u32), BmpError> {
         u32::from_le_bytes(a[12..16].try_into().unwrap()),
       ]
     }
-    _ => [0, 0, 0, 0],
+    // When bitmasks aren't specified, there's default RGB mask values based on
+    // the bit depth, either 555 (16-bit) or 888 (32-bit).
+    _ => match bits_per_pixel {
+      16 => [0b11111 << 10, 0b11111 << 5, 0b11111, 0],
+      32 => [0b11111111 << 16, 0b11111111 << 8, 0b11111111, 0],
+      _ => [0, 0, 0, 0],
+    },
   };
   println!(
     "bitmasks: [\n  r:{r_mask:032b}\n  g:{g_mask:032b}\n  b:{b_mask:032b}\n  a:{a_mask:032b}\n]",
@@ -388,5 +408,231 @@ fn parse_me_a_bmp_yo(bmp: &[u8]) -> Result<(Vec<RGBA8>, u32, u32), BmpError> {
     a_mask = a_mask
   );
 
-  Err(BmpError::ParserIncomplete)
+  #[allow(unused_assignments)]
+  let palette: Vec<RGBA8> = match info_header.palette_len() {
+    0 => Vec::new(),
+    count => {
+      let mut v = Vec::new();
+      v.try_reserve(count).map_err(|_| BmpError::AllocError)?;
+      match info_header {
+        BmpInfoHeader::Core(_) => {
+          let bytes_needed = count * size_of::<[u8; 3]>();
+          let (pal_slice, new_rest) = if rest.len() < bytes_needed {
+            return Err(BmpError::InsufficientBytes);
+          } else {
+            rest.split_at(bytes_needed)
+          };
+          rest = new_rest;
+          let pal_slice: &[[u8; 3]] = cast_slice(pal_slice);
+          for [r, g, b] in pal_slice.iter().copied() {
+            v.push(RGBA8 { r, g, b, a: 0xFF });
+          }
+        }
+        _ => {
+          let bytes_needed = count * size_of::<[u8; 4]>();
+          let (pal_slice, new_rest) = if rest.len() < bytes_needed {
+            return Err(BmpError::InsufficientBytes);
+          } else {
+            rest.split_at(bytes_needed)
+          };
+          rest = new_rest;
+          let pal_slice: &[[u8; 4]] = cast_slice(pal_slice);
+          for [r, g, b, a] in pal_slice.iter().copied() {
+            v.push(RGBA8 { r, g, b, a });
+          }
+          if v.iter().copied().all(|c| c.a == 0) {
+            v.iter_mut().for_each(|c| c.a = 0xFF);
+          }
+        }
+      }
+      v
+    }
+  };
+  println!("palette: {palette:?}", palette = palette);
+
+  let pixel_data_start_index: usize = file_header.pixel_data_offset as usize;
+  let pixel_data_end_index: usize = pixel_data_start_index + info_header.pixel_data_len();
+  let pixel_data = if bmp.len() < pixel_data_end_index {
+    return Err(BmpError::InsufficientBytes);
+  } else {
+    &bmp[pixel_data_start_index..pixel_data_end_index]
+  };
+
+  match compression {
+    BmpCompression::RgbNoCompression
+    | BmpCompression::Bitfields
+    | BmpCompression::AlphaBitfields => {
+      let bits_per_line: usize =
+        bits_per_pixel.saturating_mul(info_header.width().unsigned_abs() as usize);
+      let no_padding_bytes_per_line: usize =
+        (bits_per_line / 8) + (((bits_per_line % 8) != 0) as usize);
+      let bytes_per_line: usize =
+        ((no_padding_bytes_per_line / 4) + ((no_padding_bytes_per_line % 4) != 0) as usize) * 4;
+      debug_assert!(no_padding_bytes_per_line <= bytes_per_line);
+      debug_assert_eq!(bytes_per_line % 4, 0);
+      if (pixel_data.len() % bytes_per_line) != 0
+        || (pixel_data.len() / bytes_per_line) != (info_header.height().unsigned_abs() as usize)
+      {
+        return Err(BmpError::PixelDataIllegalLength);
+      }
+      //
+
+      match bits_per_pixel {
+        1 | 2 | 4 => {
+          let (base_mask, base_down_shift) = match bits_per_pixel {
+            1 => (0b1000_0000, 7),
+            2 => (0b1100_0000, 6),
+            4 => (0b1111_0000, 4),
+            _ => unreachable!(),
+          };
+          let mut per_row_op = |i: &mut dyn Iterator<Item = (usize, &[u8])>| {
+            while let Some((y, data_row)) = i.next() {
+              let mut x = 0;
+              for byte in data_row.iter().copied() {
+                let mut mask: u8 = base_mask;
+                let mut down_shift: usize = base_down_shift;
+                while mask != 0 && x < width {
+                  let pal_index = (byte & mask) >> down_shift;
+                  let rgba8 = palette.get(pal_index as usize).copied().unwrap_or_default();
+                  final_storage[(y * width + x) as usize] = rgba8;
+                  //
+                  mask >>= bits_per_pixel;
+                  down_shift = down_shift.wrapping_sub(bits_per_pixel);
+                  x += 1;
+                }
+              }
+            }
+          };
+          if info_header.height() < 0 {
+            per_row_op(&mut pixel_data.chunks_exact(bytes_per_line).enumerate());
+          } else {
+            per_row_op(&mut pixel_data.rchunks_exact(bytes_per_line).enumerate());
+          }
+        }
+        8 => {
+          let mut per_row_op = |i: &mut dyn Iterator<Item = (usize, &[u8])>| {
+            while let Some((y, data_row)) = i.next() {
+              for (x, pal_index) in
+                data_row[..no_padding_bytes_per_line].iter().copied().enumerate()
+              {
+                let rgba8 = palette.get(pal_index as usize).copied().unwrap_or_default();
+                final_storage[(y * width + x) as usize] = rgba8;
+              }
+            }
+          };
+          if info_header.height() < 0 {
+            per_row_op(&mut pixel_data.chunks_exact(bytes_per_line).enumerate());
+          } else {
+            per_row_op(&mut pixel_data.rchunks_exact(bytes_per_line).enumerate());
+          }
+        }
+        24 => {
+          let mut per_row_op = |i: &mut dyn Iterator<Item = (usize, &[u8])>| {
+            while let Some((y, data_row)) = i.next() {
+              for (x, [r, g, b]) in
+                cast_slice::<u8, [u8; 3]>(&data_row[..no_padding_bytes_per_line])
+                  .iter()
+                  .copied()
+                  .enumerate()
+              {
+                let rgba8 = RGBA8 { r, g, b, a: 0xFF };
+                final_storage[(y * width + x) as usize] = rgba8;
+              }
+            }
+          };
+          if info_header.height() < 0 {
+            per_row_op(&mut pixel_data.chunks_exact(bytes_per_line).enumerate())
+          } else {
+            per_row_op(&mut pixel_data.rchunks_exact(bytes_per_line).enumerate())
+          }
+        }
+        16 => {
+          let r_shift: u32 = if r_mask != 0 { r_mask.trailing_zeros() } else { 0 };
+          let g_shift: u32 = if g_mask != 0 { g_mask.trailing_zeros() } else { 0 };
+          let b_shift: u32 = if b_mask != 0 { b_mask.trailing_zeros() } else { 0 };
+          let a_shift: u32 = if a_mask != 0 { a_mask.trailing_zeros() } else { 0 };
+          let r_max: f32 = (r_mask >> r_shift) as f32;
+          let g_max: f32 = (g_mask >> g_shift) as f32;
+          let b_max: f32 = (b_mask >> b_shift) as f32;
+          let a_max: f32 = (a_mask >> a_shift) as f32;
+          //
+          #[rustfmt::skip]
+          let mut per_row_op = |i: &mut dyn Iterator<Item = (usize, &[u8])>| {
+            while let Some((y, data_row)) = i.next() {
+              for (x, data) in cast_slice::<u8, [u8; 2]>(&data_row[..no_padding_bytes_per_line])
+                .iter()
+                .copied()
+                .enumerate()
+              {
+                // TODO: look at how SIMD this could be.
+                let u = u16::from_le_bytes(data) as u32;
+                let r: u8 = if r_mask != 0 { ((((u & r_mask) >> r_shift) as f32 / r_max) * 255.0) as u8 } else { 0 };
+                let g: u8 = if g_mask != 0 { ((((u & g_mask) >> g_shift) as f32 / g_max) * 255.0) as u8 } else { 0 };
+                let b: u8 = if b_mask != 0 { ((((u & b_mask) >> b_shift) as f32 / b_max) * 255.0) as u8 } else { 0 };
+                let a: u8 = if a_mask != 0 { ((((u & a_mask) >> a_shift) as f32 / a_max) * 255.0) as u8 } else { 0xFF };
+                let rgba8 = RGBA8 { r, g, b, a };
+                final_storage[(y * width + x) as usize] = rgba8;
+              }
+            }
+          };
+          if info_header.height() < 0 {
+            per_row_op(&mut pixel_data.chunks_exact(bytes_per_line).enumerate())
+          } else {
+            per_row_op(&mut pixel_data.rchunks_exact(bytes_per_line).enumerate())
+          }
+        }
+        32 => {
+          let r_shift: u32 = if r_mask != 0 { r_mask.trailing_zeros() } else { 0 };
+          let g_shift: u32 = if g_mask != 0 { g_mask.trailing_zeros() } else { 0 };
+          let b_shift: u32 = if b_mask != 0 { b_mask.trailing_zeros() } else { 0 };
+          let a_shift: u32 = if a_mask != 0 { a_mask.trailing_zeros() } else { 0 };
+          let r_max: f32 = (r_mask >> r_shift) as f32;
+          let g_max: f32 = (g_mask >> g_shift) as f32;
+          let b_max: f32 = (b_mask >> b_shift) as f32;
+          let a_max: f32 = (a_mask >> a_shift) as f32;
+          //
+          #[rustfmt::skip]
+          let mut per_row_op = |i: &mut dyn Iterator<Item = (usize, &[u8])>| {
+            while let Some((y, data_row)) = i.next() {
+              for (x, data) in cast_slice::<u8, [u8; 4]>(&data_row[..no_padding_bytes_per_line])
+                .iter()
+                .copied()
+                .enumerate()
+              {
+                // TODO: look at how SIMD this could be.
+                let u = u32::from_le_bytes(data);
+                let r: u8 = if r_mask != 0 { ((((u & r_mask) >> r_shift) as f32 / r_max) * 255.0) as u8 } else { 0 };
+                let g: u8 = if g_mask != 0 { ((((u & g_mask) >> g_shift) as f32 / g_max) * 255.0) as u8 } else { 0 };
+                let b: u8 = if b_mask != 0 { ((((u & b_mask) >> b_shift) as f32 / b_max) * 255.0) as u8 } else { 0 };
+                let a: u8 = if a_mask != 0 { ((((u & a_mask) >> a_shift) as f32 / a_max) * 255.0) as u8 } else { 0xFF };
+                let rgba8 = RGBA8 { r, g, b, a };
+                final_storage[(y * width + x) as usize] = rgba8;
+              }
+            }
+          };
+          if info_header.height() < 0 {
+            per_row_op(&mut pixel_data.chunks_exact(bytes_per_line).enumerate())
+          } else {
+            per_row_op(&mut pixel_data.rchunks_exact(bytes_per_line).enumerate())
+          }
+        }
+        _ => return Err(BmpError::IllegalBitDepth),
+      }
+    }
+    // TODO: implement this, the explanation of how this works is here:
+    // https://docs.microsoft.com/en-us/windows/win32/gdi/bitmap-compression
+    BmpCompression::RgbRLE4 => return Err(BmpError::ParserIncomplete),
+    BmpCompression::RgbRLE8 => return Err(BmpError::ParserIncomplete),
+    // Note(Lokathor): Uh, I guess "the entire file is inside the 'pixel_array'
+    // data" or whatever? We need example files that use this compression before
+    // we can begin to check out what's going on here.
+    BmpCompression::Jpeg => return Err(BmpError::ParserIncomplete),
+    BmpCompression::Png => return Err(BmpError::ParserIncomplete),
+    // Note(Lokathor): probably we never need to support this until someone asks?
+    BmpCompression::CmykNoCompression => return Err(BmpError::ParserIncomplete),
+    BmpCompression::CmykRLE4 => return Err(BmpError::ParserIncomplete),
+    BmpCompression::CmykRLE8 => return Err(BmpError::ParserIncomplete),
+  }
+
+  Ok((final_storage, width as u32, height as u32))
 }
