@@ -1,1 +1,1 @@
-cargo run --example demo --features=alloc
+cargo run --example demo --all-features
