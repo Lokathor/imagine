@@ -36,6 +36,9 @@ pub mod png;
 #[cfg(feature = "bmp")]
 pub mod bmp;
 
+#[cfg(feature = "pbm")]
+pub mod pbm;
+
 /// Used by various image formats that support sRGB colors.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 // Note(Lokathor): This doesn't have direct impls to parse to and from bytes
