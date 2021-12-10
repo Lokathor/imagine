@@ -36,8 +36,8 @@ pub mod png;
 #[cfg(feature = "bmp")]
 pub mod bmp;
 
-#[cfg(feature = "pbm")]
-pub mod pbm;
+#[cfg(feature = "netpbm")]
+pub mod netpbm;
 
 /// Used by various image formats that support sRGB colors.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
