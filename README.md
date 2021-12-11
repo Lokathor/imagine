@@ -28,3 +28,14 @@
   reason.
 
 There's many places for improvement, file PRs if you like!
+
+## License
+
+All the code and docs are licensed as given in the `Cargo.toml` file.
+
+**However,** this repository also contains a number of test images (within the
+`tests/` directory), many of which are used under various other permissive
+licenses. In this case, each folder of images will have a file giving the
+license information. Since this library's test data is not included in your own
+program when you use the crate as a dependency this should not generally be a
+concern.
