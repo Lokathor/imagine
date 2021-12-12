@@ -1,0 +1,17 @@
+https://hg2dc.com/why/
+
+https://github.com/OpenImageIO/oiio/pull/2447
+
+https://www.awaresystems.be/imaging/tiff/tifftags/extrasamples.html
+
+https://groups.google.com/g/osl-dev/c/3QKlnfW6dB0/m/KdziBfxeBgAJ?pli=1
+
+https://groups.google.com/g/ocio-dev/c/ZehKhUFqhjc
+
+https://community.adobe.com/t5/photoshop-ecosystem-discussions/change-in-exr-open-from-cs2-to-cs3-can-this-be-fixed/td-p/1520950
+
+https://community.adobe.com/t5/photoshop-ecosystem-discussions/change-in-exr-open-from-cs2-to-cs3-can-this-be-fixed/m-p/1521042/page/4#M918
+
+https://community.adobe.com/t5/photoshop-ecosystem-discussions/change-in-exr-open-from-cs2-to-cs3-can-this-be-fixed/m-p/1521072/page/5#M948
+
+http://alvyray.com/Memos/CG/Microsoft/5_sprite.pdf
