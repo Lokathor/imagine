@@ -92,7 +92,21 @@
 //! Each label and value is supposed to appear on its own line. The P7 format
 //! does not support comments.
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[non_exhaustive]
+pub enum NetpbmError {
+  NoTagPresent,
+  InsufficientBytes,
+  CouldNotParseUnsigned,
+  CouldNotParseFloat,
+  ParserIncomplete,
+  CouldNotAlloc,
+  MaxValueExceedsU16,
+  IntegerExceedsMaxValue,
+}
+
 /// Describes what channels are in the Netpbm image.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum NetpbmChannels {
   Y,
   YA,
@@ -101,6 +115,7 @@ pub enum NetpbmChannels {
 }
 
 /// Describes how the data for each channel is stored.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum NetpbmDataFormat {
   /// Data is ascii strings that have to be parsed.
   ///
@@ -118,6 +133,7 @@ pub enum NetpbmDataFormat {
 }
 
 /// Header for a Netpbm file where channel values are stored as integers.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct NetpbmIntHeader {
   /// Image width in pixels.
   pub width: u32,
@@ -136,6 +152,7 @@ pub struct NetpbmIntHeader {
 /// For this header, pixel data is always binary, but depending on the
 /// `max_value` that the header declares the floats can be either big-endian or
 /// little-endian.
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub struct NetpbmFloatHeader {
   /// Image width in pixels.
   pub width: u32,
@@ -151,7 +168,87 @@ pub struct NetpbmFloatHeader {
   pub channels: NetpbmChannels,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub enum NetpbmHeader {
   Int(NetpbmIntHeader),
   Float(NetpbmFloatHeader),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum NetpbmTag {
+  P1,
+  P2,
+  P3,
+  P4,
+  P5,
+  P6,
+  P7,
+  Pf,
+  PF,
+  PF4,
+}
+
+/// Trims off any comments and whitespace at the start of the bytes.
+///
+/// This makes the bytes ready to read in the next token.
+pub fn netpbm_trim_comments_and_whitespace(mut bytes: &[u8]) -> &[u8] {
+  loop {
+    match bytes.get(0) {
+      // Note(Lokathor): A '#' starts a comment to the end of the "line". By
+      // looking for just '\n' will cover both unix ("\n") and windows ("\r\n")
+      // style line endings. If someone wants to improve the line ending logic
+      // they can PR that.
+      Some(b'#') => match bytes.iter().position(|&u| u == b'\n') {
+        Some(i) => bytes = &bytes[i..],
+        None => bytes = &[],
+      },
+      // Note(Lokathor): According to the docs on this method not everyone
+      // agrees what exactly "ascii whitespace" is, but the Netpbm file format
+      // family isn't super hard specified so people shouldn't be getting cute
+      // with it anyway.
+      Some(u) if u.is_ascii_whitespace() => bytes = &bytes[1..],
+      _ => break,
+    }
+  }
+  bytes
+}
+
+/// Breaks the tag off the front of the bytes.
+///
+/// Also trims off any comments and whitespace so that you're immediately ready
+/// to read the next token.
+pub fn netpbm_break_tag(netpbm: &[u8]) -> Result<(NetpbmTag, &[u8]), NetpbmError> {
+  Ok(match netpbm {
+    [b'P', b'1', rest @ ..] => (NetpbmTag::P1, rest),
+    [b'P', b'2', rest @ ..] => (NetpbmTag::P2, rest),
+    [b'P', b'3', rest @ ..] => (NetpbmTag::P3, rest),
+    [b'P', b'4', rest @ ..] => (NetpbmTag::P4, rest),
+    [b'P', b'5', rest @ ..] => (NetpbmTag::P5, rest),
+    [b'P', b'6', rest @ ..] => (NetpbmTag::P6, rest),
+    [b'P', b'7', rest @ ..] => (NetpbmTag::P7, rest),
+    [b'P', b'f', rest @ ..] => (NetpbmTag::Pf, rest),
+    [b'P', b'F', rest @ ..] => (NetpbmTag::PF, rest),
+    [b'P', b'F', b'4', rest @ ..] => (NetpbmTag::PF4, rest),
+    _ => return Err(NetpbmError::NoTagPresent),
+  })
+}
+
+pub fn netpbm_read_ascii_unsigned(bytes: &[u8]) -> Result<(u32, &[u8]), NetpbmError> {
+  let (digits, rest) =
+    bytes.split_at(bytes.iter().position(|u| u.is_ascii_whitespace()).unwrap_or(bytes.len()));
+  let u: u32 = core::str::from_utf8(digits)
+    .map_err(|e| NetpbmError::CouldNotParseUnsigned)?
+    .parse()
+    .map_err(|e| NetpbmError::CouldNotParseUnsigned)?;
+  Ok((u, rest))
+}
+
+pub fn netpbm_read_ascii_float(bytes: &[u8]) -> Result<(f32, &[u8]), NetpbmError> {
+  let (digits, rest) =
+    bytes.split_at(bytes.iter().position(|u| u.is_ascii_whitespace()).unwrap_or(bytes.len()));
+  let f: f32 = core::str::from_utf8(digits)
+    .map_err(|e| NetpbmError::CouldNotParseUnsigned)?
+    .parse()
+    .map_err(|e| NetpbmError::CouldNotParseUnsigned)?;
+  Ok((f, rest))
 }
