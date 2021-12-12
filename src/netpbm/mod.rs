@@ -92,62 +92,66 @@
 //! Each label and value is supposed to appear on its own line. The P7 format
 //! does not support comments.
 
-pub struct P1Header {
-  pub width: u32,
-  pub height: u32,
-}
-
-pub struct P2Header {
-  pub width: u32,
-  pub height: u32,
-  pub max_value: u16,
-}
-
-pub struct P3Header {
-  pub width: u32,
-  pub height: u32,
-  pub max_value: u16,
-}
-
-pub struct P4Header {
-  pub width: u32,
-  pub height: u32,
-}
-
-pub struct P5Header {
-  pub width: u32,
-  pub height: u32,
-  pub max_value: u16,
-}
-
-pub struct P6Header {
-  pub width: u32,
-  pub height: u32,
-  pub max_value: u16,
-}
-
-pub struct PFHeader {
-  pub width: u32,
-  pub height: u32,
-  pub max_value: f32,
-}
-
-pub struct PfHeader {
-  pub width: u32,
-  pub height: u32,
-  pub max_value: f32,
-}
-
-pub enum P7Channels {
+/// Describes what channels are in the Netpbm image.
+pub enum NetpbmChannels {
   Y,
   YA,
   RGB,
   RGBA,
 }
 
-pub struct P7Header {
+/// Describes how the data for each channel is stored.
+pub enum NetpbmDataFormat {
+  /// Data is ascii strings that have to be parsed.
+  ///
+  /// Values are normally whitespace separated. If the image is gray scale with
+  /// a max value of 1 (aka the P1 tag) then whitespace is not required.
+  Ascii,
+  /// Data is binary bytes.
+  ///
+  /// Depending on the maximum value per channel there might be more than one
+  /// byte per channel value. Bytes should be read as big-endian by default.
+  Binary,
+  /// Pixel values are 1 bit per pixel and packed into bytes, high bit to low
+  /// bit.
+  Bitpacked,
+}
+
+/// Header for a Netpbm file where channel values are stored as integers.
+pub struct NetpbmIntHeader {
+  /// Image width in pixels.
   pub width: u32,
+  /// Image height in pixels.
   pub height: u32,
-  pub max_value: u16,
-  pub channels: P7Channels,
+  /// The maximum value in a single channel.
+  pub max_value: u32,
+  /// The channel layout of the image.
+  pub channels: NetpbmChannels,
+  /// The layout of the channel data within the file.
+  pub data_format: NetpbmDataFormat,
+}
+
+/// Header for a Netpbm file where channel values are stored as floats.
+///
+/// For this header, pixel data is always binary, but depending on the
+/// `max_value` that the header declares the floats can be either big-endian or
+/// little-endian.
+pub struct NetpbmFloatHeader {
+  /// Image width in pixels.
+  pub width: u32,
+  /// Image height in pixels.
+  pub height: u32,
+  /// The absolute value indicates the range, while sign indicates data
+  /// endian-ness.
+  ///
+  /// * Positive: big-endian.
+  /// * Negative: little-endian.
+  pub max_value: f32,
+  /// The channel layout of the image.
+  pub channels: NetpbmChannels,
+}
+
+pub enum NetpbmHeader {
+  Int(NetpbmIntHeader),
+  Float(NetpbmFloatHeader),
 }
