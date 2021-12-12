@@ -20,14 +20,18 @@
 //! ways that you might change data between pixel formats.
 //!
 //! ### Between Gray and RGB
-//! When going between grayscale and RGB coloring, the simple method is to use
-//! an even split (to RGB) or an average (to Gray).
+//! When going from grayscale to RGB one just simply copies the gray value to
+//! each of the RGB channels.
 //!
-//! However, human eyes don't respond equally to all three colors. To account
-//! for this, you can weight the value of each channel.
+//! However, the reverse isn't quite true. Because the human eyes don't respond
+//! equally to all three colors, converting an RGB image to grayscale isn't a
+//! plain average. Instead, there's some weighting, as follows:
 //! ```text
 //! Y = 0.299 * R + 0.587 * G + 0.114 * B
 //! ```
+//! (Remember, this is a linear color transformation, so if the source and/or
+//! destination values aren't linear then you will also need to do that
+//! conversion.)
 //!
 //! ### Between Bit Depths
 //! All current formats have channel values stored only as integer values. Even

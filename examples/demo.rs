@@ -318,8 +318,7 @@ fn y4_to_rgba8(y4: u8) -> RGBA8 {
 }
 
 fn y8_to_rgba8(y8: u8) -> RGBA8 {
-  let y = y8 as f32;
-  RGBA8 { r: (0.299 * y) as u8, g: (0.587 * y) as u8, b: (0.114 * y) as u8, a: 0xFF }
+  RGBA8 { r: y8, g: y8, b: y8, a: 0xFF }
 }
 
 fn rgb8_to_rgba8(rgb8: RGB8) -> RGBA8 {
