@@ -140,6 +140,7 @@ where
 {
   type Item = [I::Item; N];
 
+  #[inline]
   fn next(&mut self) -> Option<Self::Item> {
     // Safety: This unwraps a `MaybeUninit<[MaybeUninit<I::Item>; N]>` into the
     // inner `[MaybeUninit<I::Item>; N]` array, which is always safe because all
