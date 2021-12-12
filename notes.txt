@@ -15,3 +15,5 @@ https://community.adobe.com/t5/photoshop-ecosystem-discussions/change-in-exr-ope
 https://community.adobe.com/t5/photoshop-ecosystem-discussions/change-in-exr-open-from-cs2-to-cs3-can-this-be-fixed/m-p/1521072/page/5#M948
 
 http://alvyray.com/Memos/CG/Microsoft/5_sprite.pdf
+
+https://shawnhargreaves.com/blogindex.html#premultipliedalpha
