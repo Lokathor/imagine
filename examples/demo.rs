@@ -249,7 +249,7 @@ fn parse_me_a_png_yo(png: &[u8]) -> Result<(Vec<RGBA8>, u32, u32), PngError> {
     PngPixelFormat::Y8 => {
       unfilter_decompressed_data(ihdr, &mut temp_memory_buffer, |x, y, data| {
         let y8 = bytemuck::cast_slice(data)[0];
-        let mut rgba8 = y1_to_rgba8(y8);
+        let mut rgba8 = y8_to_rgba8(y8);
         if let Some(y8_trns_key) = transparency.and_then(tRNS::to_y8) {
           if y8 == y8_trns_key.y {
             rgba8.a = 0;
