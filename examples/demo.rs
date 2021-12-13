@@ -6,7 +6,7 @@ use imagine::{
   iter_1bpp_high_to_low,
   netpbm::{
     netpbm_break_tag, netpbm_read_ascii_float, netpbm_read_ascii_unsigned,
-    netpbm_trim_comments_and_whitespace, NetpbmError,
+    netpbm_trim_comments_and_whitespace, NetpbmChannels, NetpbmError,
   },
   png::*,
   BulkenIter, RGB16_BE, RGB8, RGBA16_BE, RGBA8, Y16_BE, Y8, YA16_BE, YA8,
@@ -882,7 +882,353 @@ fn parse_me_a_netpbm_yo(netpbm: &[u8]) -> Result<(Vec<RGBA8>, u32, u32), NetpbmE
   println!("== Parsing a Netpbm file...");
   let (tag, rest) = netpbm_break_tag(netpbm)?;
   match tag {
-    P7 => todo!("handle P7, which has an alternate (stricter) header format"),
+    P7 => {
+      let (width, rest) = match netpbm_trim_comments_and_whitespace(rest) {
+        [b'W', b'I', b'D', b'T', b'H', b' ', rest @ ..] => netpbm_read_ascii_unsigned(rest)?,
+        _otherwise => return Err(NetpbmError::HeaderIllegalFormat),
+      };
+      let (height, rest) = match netpbm_trim_comments_and_whitespace(rest) {
+        [b'H', b'E', b'I', b'G', b'H', b'T', b' ', rest @ ..] => netpbm_read_ascii_unsigned(rest)?,
+        _otherwise => return Err(NetpbmError::HeaderIllegalFormat),
+      };
+      let (depth, rest) = match netpbm_trim_comments_and_whitespace(rest) {
+        [b'D', b'E', b'P', b'T', b'H', b' ', rest @ ..] => netpbm_read_ascii_unsigned(rest)?,
+        _otherwise => return Err(NetpbmError::HeaderIllegalFormat),
+      };
+      let (max_val, rest) = match netpbm_trim_comments_and_whitespace(rest) {
+        [b'M', b'A', b'X', b'V', b'A', b'L', b' ', rest @ ..] => netpbm_read_ascii_unsigned(rest)?,
+        _otherwise => return Err(NetpbmError::HeaderIllegalFormat),
+      };
+      if max_val > U16_MAX_AS_U32 {
+        return Err(NetpbmError::MaxValueExceedsU16);
+      }
+      let (channel_layout, rest) = match netpbm_trim_comments_and_whitespace(rest) {
+        [b'T', b'U', b'P', b'L', b'T', b'Y', b'P', b'E', b' ', rest @ ..] => {
+          let mut splitn_it = rest.splitn(2, |u| u.is_ascii_whitespace());
+          let channel_layout =
+            match (splitn_it.next().ok_or(NetpbmError::HeaderIllegalFormat)?, depth, max_val) {
+              (b"BLACKANDWHITE", 1, 1) => NetpbmChannels::Y,
+              (b"GRAYSCALE", 1, _) => NetpbmChannels::Y,
+              (b"RGB", 3, _) => NetpbmChannels::RGB,
+              (b"BLACKANDWHITE_ALPHA", 2, 1) => NetpbmChannels::YA,
+              (b"GRAYSCALE_ALPHA", 2, _) => NetpbmChannels::YA,
+              (b"RGB_ALPHA", 4, _) => NetpbmChannels::RGBA,
+              _otherwise => return Err(NetpbmError::HeaderIllegalFormat),
+            };
+          let rest = splitn_it.next().ok_or(NetpbmError::HeaderIllegalFormat)?;
+          (channel_layout, rest)
+        }
+        _otherwise => return Err(NetpbmError::HeaderIllegalFormat),
+      };
+      let pixel_data = match netpbm_trim_comments_and_whitespace(rest) {
+        [b'E', b'N', b'D', b'H', b'D', b'R', b'\n', rest @ ..] => rest,
+        [b'E', b'N', b'D', b'H', b'D', b'R', b'\r', b'\n', rest @ ..] => rest,
+        _otherwise => return Err(NetpbmError::HeaderIllegalFormat),
+      };
+      //
+      let pixel_count = width.saturating_mul(height) as usize;
+      let mut out_buffer: Vec<RGBA8> = Vec::new();
+      out_buffer.try_reserve(pixel_count).map_err(|_| NetpbmError::CouldNotAlloc)?;
+      //
+      match (channel_layout, max_val <= 255) {
+        (NetpbmChannels::Y, true) => {
+          match max_val {
+            U8_MAX_AS_U32 => {
+              for y in pixel_data.iter().copied().take(pixel_count) {
+                out_buffer.push(RGBA8 { r: y, b: y, g: y, a: 0xFF });
+              }
+            }
+            _otherwise => {
+              let max_f = max_val as f32;
+              for u in pixel_data.iter().copied().take(pixel_count) {
+                let y = if u > (max_val as u8) {
+                  return Err(NetpbmError::IntegerExceedsMaxValue);
+                } else {
+                  ((u as f32 / max_f) * 255.0) as u8
+                };
+                out_buffer.push(RGBA8 { r: y, b: y, g: y, a: 0xFF });
+              }
+            }
+          }
+          Ok((out_buffer, width, height))
+        }
+        (NetpbmChannels::YA, true) => {
+          if (pixel_data.len() % 2) != 0 {
+            return Err(NetpbmError::InsufficientBytes);
+          }
+          match max_val {
+            U8_MAX_AS_U32 => {
+              for [y, a] in cast_slice::<u8, [u8; 2]>(pixel_data).iter().copied().take(pixel_count)
+              {
+                out_buffer.push(RGBA8 { r: y, b: y, g: y, a });
+              }
+            }
+            _otherwise => {
+              let max_f = max_val as f32;
+              for [u0, u1] in
+                cast_slice::<u8, [u8; 2]>(pixel_data).iter().copied().take(pixel_count)
+              {
+                let [y, a] = if u0 > (max_val as u8) || u1 > (max_val as u8) {
+                  return Err(NetpbmError::IntegerExceedsMaxValue);
+                } else {
+                  [((u0 as f32 / max_f) * 255.0) as u8, ((u1 as f32 / max_f) * 255.0) as u8]
+                };
+                out_buffer.push(RGBA8 { r: y, b: y, g: y, a });
+              }
+            }
+          }
+          Ok((out_buffer, width, height))
+        }
+        (NetpbmChannels::RGB, true) => {
+          if (pixel_data.len() % 3) != 0 {
+            return Err(NetpbmError::InsufficientBytes);
+          }
+          match max_val {
+            U8_MAX_AS_U32 => {
+              for [r, g, b] in
+                cast_slice::<u8, [u8; 3]>(pixel_data).iter().copied().take(pixel_count)
+              {
+                out_buffer.push(RGBA8 { r, g, b, a: 0xFF });
+              }
+            }
+            _otherwise => {
+              let max_f = max_val as f32;
+              for [u0, u1, u2] in
+                cast_slice::<u8, [u8; 3]>(pixel_data).iter().copied().take(pixel_count)
+              {
+                let [r, g, b] =
+                  if u0 > (max_val as u8) || u1 > (max_val as u8) || u2 > (max_val as u8) {
+                    return Err(NetpbmError::IntegerExceedsMaxValue);
+                  } else {
+                    [
+                      ((u0 as f32 / max_f) * 255.0) as u8,
+                      ((u1 as f32 / max_f) * 255.0) as u8,
+                      ((u2 as f32 / max_f) * 255.0) as u8,
+                    ]
+                  };
+                out_buffer.push(RGBA8 { r, b, g, a: 0xFF });
+              }
+            }
+          }
+          Ok((out_buffer, width, height))
+        }
+        (NetpbmChannels::RGBA, true) => {
+          if (pixel_data.len() % 4) != 0 {
+            return Err(NetpbmError::InsufficientBytes);
+          }
+          match max_val {
+            U8_MAX_AS_U32 => {
+              for [r, g, b, a] in
+                cast_slice::<u8, [u8; 4]>(pixel_data).iter().copied().take(pixel_count)
+              {
+                out_buffer.push(RGBA8 { r, g, b, a });
+              }
+            }
+            _otherwise => {
+              let max_f = max_val as f32;
+              for [u0, u1, u2, u3] in
+                cast_slice::<u8, [u8; 4]>(pixel_data).iter().copied().take(pixel_count)
+              {
+                let [r, g, b, a] = if u0 > (max_val as u8)
+                  || u1 > (max_val as u8)
+                  || u2 > (max_val as u8)
+                  || u3 > (max_val as u8)
+                {
+                  return Err(NetpbmError::IntegerExceedsMaxValue);
+                } else {
+                  [
+                    ((u0 as f32 / max_f) * 255.0) as u8,
+                    ((u1 as f32 / max_f) * 255.0) as u8,
+                    ((u2 as f32 / max_f) * 255.0) as u8,
+                    ((u3 as f32 / max_f) * 255.0) as u8,
+                  ]
+                };
+                out_buffer.push(RGBA8 { r, b, g, a });
+              }
+            }
+          }
+          Ok((out_buffer, width, height))
+        }
+        (NetpbmChannels::Y, false) => {
+          if (pixel_data.len() % 2) != 0 {
+            return Err(NetpbmError::InsufficientBytes);
+          }
+          match max_val {
+            U16_MAX_AS_U32 => {
+              for [y] in pixel_data
+                .chunks_exact(2)
+                .map(|chunk| [(u16::from_be_bytes([chunk[0], chunk[1]]) >> 8) as u8])
+                .take(pixel_count)
+              {
+                out_buffer.push(RGBA8 { r: y, b: y, g: y, a: 0xFF });
+              }
+            }
+            _otherwise => {
+              let max_f = max_val as f32;
+              for [u0] in pixel_data
+                .chunks_exact(2)
+                .map(|chunk| [u16::from_be_bytes([chunk[0], chunk[1]])])
+                .take(pixel_count)
+              {
+                let [y] = if u0 > (max_val as u16) {
+                  return Err(NetpbmError::IntegerExceedsMaxValue);
+                } else {
+                  [((u0 as f32 / max_f) * 255.0) as u8]
+                };
+                out_buffer.push(RGBA8 { r: y, b: y, g: y, a: 0xFF });
+              }
+            }
+          }
+          Ok((out_buffer, width, height))
+        }
+        (NetpbmChannels::YA, false) => {
+          if (pixel_data.len() % 4) != 0 {
+            return Err(NetpbmError::InsufficientBytes);
+          }
+          match max_val {
+            U16_MAX_AS_U32 => {
+              for [y, a] in pixel_data
+                .chunks_exact(4)
+                .map(|chunk| {
+                  [
+                    (u16::from_be_bytes([chunk[0], chunk[1]]) >> 8) as u8,
+                    (u16::from_be_bytes([chunk[2], chunk[3]]) >> 8) as u8,
+                  ]
+                })
+                .take(pixel_count)
+              {
+                out_buffer.push(RGBA8 { r: y, b: y, g: y, a });
+              }
+            }
+            _otherwise => {
+              let max_f = max_val as f32;
+              for [u0, u1] in pixel_data
+                .chunks_exact(4)
+                .map(|chunk| {
+                  [
+                    u16::from_be_bytes([chunk[0], chunk[1]]),
+                    u16::from_be_bytes([chunk[2], chunk[3]]),
+                  ]
+                })
+                .take(pixel_count)
+              {
+                let [y, a] = if u0 > (max_val as u16) || u1 > (max_val as u16) {
+                  return Err(NetpbmError::IntegerExceedsMaxValue);
+                } else {
+                  [((u0 as f32 / max_f) * 255.0) as u8, ((u1 as f32 / max_f) * 255.0) as u8]
+                };
+                out_buffer.push(RGBA8 { r: y, b: y, g: y, a });
+              }
+            }
+          }
+          Ok((out_buffer, width, height))
+        }
+        (NetpbmChannels::RGB, false) => {
+          if (pixel_data.len() % 6) != 0 {
+            return Err(NetpbmError::InsufficientBytes);
+          }
+          match max_val {
+            U16_MAX_AS_U32 => {
+              for [r, g, b] in pixel_data
+                .chunks_exact(6)
+                .map(|chunk| {
+                  [
+                    (u16::from_be_bytes([chunk[0], chunk[1]]) >> 8) as u8,
+                    (u16::from_be_bytes([chunk[2], chunk[3]]) >> 8) as u8,
+                    (u16::from_be_bytes([chunk[4], chunk[5]]) >> 8) as u8,
+                  ]
+                })
+                .take(pixel_count)
+              {
+                out_buffer.push(RGBA8 { r, b, g, a: 0xFF });
+              }
+            }
+            _otherwise => {
+              let max_f = max_val as f32;
+              for [u0, u1, u2] in pixel_data
+                .chunks_exact(6)
+                .map(|chunk| {
+                  [
+                    u16::from_be_bytes([chunk[0], chunk[1]]),
+                    u16::from_be_bytes([chunk[2], chunk[3]]),
+                    u16::from_be_bytes([chunk[4], chunk[5]]),
+                  ]
+                })
+                .take(pixel_count)
+              {
+                let [r, g, b] =
+                  if u0 > (max_val as u16) || u1 > (max_val as u16) || u2 > (max_val as u16) {
+                    return Err(NetpbmError::IntegerExceedsMaxValue);
+                  } else {
+                    [
+                      ((u0 as f32 / max_f) * 255.0) as u8,
+                      ((u1 as f32 / max_f) * 255.0) as u8,
+                      ((u2 as f32 / max_f) * 255.0) as u8,
+                    ]
+                  };
+                out_buffer.push(RGBA8 { r, b, g, a: 0xFF });
+              }
+            }
+          }
+          Ok((out_buffer, width, height))
+        }
+        (NetpbmChannels::RGBA, false) => {
+          if (pixel_data.len() % 8) != 0 {
+            return Err(NetpbmError::InsufficientBytes);
+          }
+          match max_val {
+            U16_MAX_AS_U32 => {
+              for [r, g, b, a] in pixel_data
+                .chunks_exact(8)
+                .map(|chunk| {
+                  [
+                    (u16::from_be_bytes([chunk[0], chunk[1]]) >> 8) as u8,
+                    (u16::from_be_bytes([chunk[2], chunk[3]]) >> 8) as u8,
+                    (u16::from_be_bytes([chunk[4], chunk[5]]) >> 8) as u8,
+                    (u16::from_be_bytes([chunk[6], chunk[7]]) >> 8) as u8,
+                  ]
+                })
+                .take(pixel_count)
+              {
+                out_buffer.push(RGBA8 { r, b, g, a });
+              }
+            }
+            _otherwise => {
+              let max_f = max_val as f32;
+              for [u0, u1, u2, u3] in pixel_data
+                .chunks_exact(8)
+                .map(|chunk| {
+                  [
+                    u16::from_be_bytes([chunk[0], chunk[1]]),
+                    u16::from_be_bytes([chunk[2], chunk[3]]),
+                    u16::from_be_bytes([chunk[4], chunk[5]]),
+                    u16::from_be_bytes([chunk[6], chunk[7]]),
+                  ]
+                })
+                .take(pixel_count)
+              {
+                let [r, g, b, a] = if u0 > (max_val as u16)
+                  || u1 > (max_val as u16)
+                  || u2 > (max_val as u16)
+                  || u3 > (max_val as u16)
+                {
+                  return Err(NetpbmError::IntegerExceedsMaxValue);
+                } else {
+                  [
+                    ((u0 as f32 / max_f) * 255.0) as u8,
+                    ((u1 as f32 / max_f) * 255.0) as u8,
+                    ((u2 as f32 / max_f) * 255.0) as u8,
+                    ((u3 as f32 / max_f) * 255.0) as u8,
+                  ]
+                };
+                out_buffer.push(RGBA8 { r, b, g, a });
+              }
+            }
+          }
+          Ok((out_buffer, width, height))
+        }
+      }
+    }
     _ => {
       let (width, rest) = netpbm_read_ascii_unsigned(netpbm_trim_comments_and_whitespace(rest))?;
       let (height, rest) = netpbm_read_ascii_unsigned(netpbm_trim_comments_and_whitespace(rest))?;

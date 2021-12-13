@@ -99,10 +99,10 @@ pub enum NetpbmError {
   InsufficientBytes,
   CouldNotParseUnsigned,
   CouldNotParseFloat,
-  ParserIncomplete,
   CouldNotAlloc,
   MaxValueExceedsU16,
   IntegerExceedsMaxValue,
+  HeaderIllegalFormat,
 }
 
 /// Describes what channels are in the Netpbm image.
