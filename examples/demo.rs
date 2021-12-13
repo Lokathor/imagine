@@ -66,7 +66,10 @@ fn main() -> Result<(), Error> {
     }
     Event::WindowEvent { event: WindowEvent::DroppedFile(path_buf), .. } => {
       let file_bytes = match std::fs::read(path_buf.as_path()) {
-        Ok(bytes) => bytes,
+        Ok(bytes) => {
+          println!("Read in all bytes of `{path_buf}`...", path_buf = path_buf.display());
+          bytes
+        }
         Err(e) => {
           eprintln!("Err opening `{path_buf}`: {e}", path_buf = path_buf.display(), e = e);
           return;
