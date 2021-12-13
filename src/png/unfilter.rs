@@ -7,7 +7,8 @@ use core::iter::repeat;
 // that branch per pixel. However, probably in practice the branch predictor
 // doesn't care too much, I hope.
 fn send_out_pixel<F: FnMut(u32, u32, &[u8])>(
-  header: IHDR, image_level: usize, reduced_x: u32, reduced_y: u32, data: &[u8], op: &mut F,
+  header: IHDR, image_level: usize, reduced_x: u32, reduced_y: u32, full_width: u32, data: &[u8],
+  op: &mut F,
 ) {
   match header.pixel_format.bits_per_channel() {
     1 => {
@@ -17,6 +18,12 @@ fn send_out_pixel<F: FnMut(u32, u32, &[u8])>(
       for plus_x in 0..8 {
         let (image_x, image_y) =
           interlaced_pos_to_full_pos(image_level, reduced_x * 8 + plus_x, reduced_y);
+        if image_x >= full_width {
+          // if we've gone outside the image's bounds then we're looking at
+          // padding bits and we cancel the rest of the outputs in this
+          // call of the function.
+          return;
+        }
         op(image_x as u32, image_y as u32, &[(full_data & mask) >> down_shift]);
         mask >>= 1;
         down_shift -= 1;
@@ -29,6 +36,12 @@ fn send_out_pixel<F: FnMut(u32, u32, &[u8])>(
       for plus_x in 0..4 {
         let (image_x, image_y) =
           interlaced_pos_to_full_pos(image_level, reduced_x * 4 + plus_x, reduced_y);
+        if image_x >= full_width {
+          // if we've gone outside the image's bounds then we're looking at
+          // padding bits and we cancel the rest of the outputs in this
+          // call of the function.
+          return;
+        }
         op(image_x as u32, image_y as u32, &[(full_data & mask) >> down_shift]);
         mask >>= 2;
         down_shift -= 2;
@@ -41,6 +54,12 @@ fn send_out_pixel<F: FnMut(u32, u32, &[u8])>(
       for plus_x in 0..2 {
         let (image_x, image_y) =
           interlaced_pos_to_full_pos(image_level, reduced_x * 2 + plus_x, reduced_y);
+        if image_x >= full_width {
+          // if we've gone outside the image's bounds then we're looking at
+          // padding bits and we cancel the rest of the outputs in this
+          // call of the function.
+          return;
+        }
         op(image_x as u32, image_y as u32, &[(full_data & mask) >> down_shift]);
         mask >>= 4;
         down_shift -= 4;
@@ -160,11 +179,11 @@ where
         1 => {
           // Sub
           let (reduced_x, pixel): (u32, &mut [u8]) = p_it.next().unwrap();
-          send_out_pixel(header, image_level, reduced_x, reduced_y, pixel, &mut op);
+          send_out_pixel(header, image_level, reduced_x, reduced_y, header.width, pixel, &mut op);
           let mut a_pixel = pixel;
           while let Some((reduced_x, pixel)) = p_it.next() {
             a_pixel.iter().copied().zip(pixel.iter_mut()).for_each(|(a, p)| *p = p.wrapping_add(a));
-            send_out_pixel(header, image_level, reduced_x, reduced_y, pixel, &mut op);
+            send_out_pixel(header, image_level, reduced_x, reduced_y, header.width, pixel, &mut op);
             //
             a_pixel = pixel;
           }
@@ -172,7 +191,7 @@ where
         3 => {
           // Average
           let (reduced_x, pixel): (u32, &mut [u8]) = p_it.next().unwrap();
-          send_out_pixel(header, image_level, reduced_x, reduced_y, pixel, &mut op);
+          send_out_pixel(header, image_level, reduced_x, reduced_y, header.width, pixel, &mut op);
           let mut a_pixel = pixel;
           while let Some((reduced_x, pixel)) = p_it.next() {
             // the `b` is always 0, so we elide it from the computation
@@ -181,7 +200,7 @@ where
               .copied()
               .zip(pixel.iter_mut())
               .for_each(|(a, p)| *p = p.wrapping_add(a / 2));
-            send_out_pixel(header, image_level, reduced_x, reduced_y, pixel, &mut op);
+            send_out_pixel(header, image_level, reduced_x, reduced_y, header.width, pixel, &mut op);
             //
             a_pixel = pixel;
           }
@@ -189,7 +208,7 @@ where
         4 => {
           // Paeth
           let (reduced_x, pixel): (u32, &mut [u8]) = p_it.next().unwrap();
-          send_out_pixel(header, image_level, reduced_x, reduced_y, pixel, &mut op);
+          send_out_pixel(header, image_level, reduced_x, reduced_y, header.width, pixel, &mut op);
           let mut a_pixel = pixel;
           while let Some((reduced_x, pixel)) = p_it.next() {
             // the `b` and `c` are both always 0
@@ -198,7 +217,7 @@ where
               .copied()
               .zip(pixel.iter_mut())
               .for_each(|(a, p)| *p = p.wrapping_add(paeth_predict(a, 0, 0)));
-            send_out_pixel(header, image_level, reduced_x, reduced_y, pixel, &mut op);
+            send_out_pixel(header, image_level, reduced_x, reduced_y, header.width, pixel, &mut op);
             //
             a_pixel = pixel;
           }
@@ -206,7 +225,7 @@ where
         _ => {
           for (reduced_x, pixel) in p_it {
             // None and Up
-            send_out_pixel(header, image_level, reduced_x, reduced_y, pixel, &mut op);
+            send_out_pixel(header, image_level, reduced_x, reduced_y, header.width, pixel, &mut op);
           }
         }
       }
@@ -224,11 +243,11 @@ where
         1 => {
           // Sub
           let (reduced_x, mut pixel): (u32, &mut [u8]) = p_it.next().unwrap();
-          send_out_pixel(header, image_level, reduced_x, reduced_y, pixel, &mut op);
+          send_out_pixel(header, image_level, reduced_x, reduced_y, header.width, pixel, &mut op);
           let mut a_pixel = pixel;
           while let Some((reduced_x, pixel)) = p_it.next() {
             a_pixel.iter().copied().zip(pixel.iter_mut()).for_each(|(a, p)| *p = p.wrapping_add(a));
-            send_out_pixel(header, image_level, reduced_x, reduced_y, pixel, &mut op);
+            send_out_pixel(header, image_level, reduced_x, reduced_y, header.width, pixel, &mut op);
             //
             a_pixel = pixel;
           }
@@ -238,7 +257,7 @@ where
           for ((reduced_x, pixel), b_pixel) in p_it.zip(b_it) {
             b_pixel.iter().copied().zip(pixel.iter_mut()).for_each(|(b, p)| *p = p.wrapping_add(b));
             //
-            send_out_pixel(header, image_level, reduced_x, reduced_y, pixel, &mut op);
+            send_out_pixel(header, image_level, reduced_x, reduced_y, header.width, pixel, &mut op);
           }
         }
         3 => {
@@ -249,7 +268,7 @@ where
             .iter_mut()
             .zip(b_pixel.iter().copied())
             .for_each(|(p, b)| *p = p.wrapping_add(b / 2));
-          send_out_pixel(header, image_level, reduced_x, reduced_y, pixel, &mut op);
+          send_out_pixel(header, image_level, reduced_x, reduced_y, header.width, pixel, &mut op);
           let mut a_pixel: &[u8] = pixel;
           while let Some((reduced_x, pixel, b_pixel)) = pb_it.next() {
             a_pixel.iter().copied().zip(b_pixel.iter().copied()).zip(pixel.iter_mut()).for_each(
@@ -257,7 +276,7 @@ where
                 *p = p.wrapping_add(((a as u32 + b as u32) / 2) as u8);
               },
             );
-            send_out_pixel(header, image_level, reduced_x, reduced_y, pixel, &mut op);
+            send_out_pixel(header, image_level, reduced_x, reduced_y, header.width, pixel, &mut op);
             //
             a_pixel = pixel;
           }
@@ -269,7 +288,7 @@ where
           pixel.iter_mut().zip(b_pixel.iter().copied()).for_each(|(p, b)| {
             *p = p.wrapping_add(paeth_predict(0, b, 0));
           });
-          send_out_pixel(header, image_level, reduced_x, reduced_y, pixel, &mut op);
+          send_out_pixel(header, image_level, reduced_x, reduced_y, header.width, pixel, &mut op);
           let mut a_pixel = pixel;
           let mut c_pixel = b_pixel;
           while let Some((reduced_x, pixel, b_pixel)) = pb_it.next() {
@@ -282,7 +301,7 @@ where
               .for_each(|(((a, b), c), p)| {
                 *p = p.wrapping_add(paeth_predict(a, b, c));
               });
-            send_out_pixel(header, image_level, reduced_x, reduced_y, pixel, &mut op);
+            send_out_pixel(header, image_level, reduced_x, reduced_y, header.width, pixel, &mut op);
             //
             a_pixel = pixel;
             c_pixel = b_pixel;
@@ -291,7 +310,7 @@ where
         _ => {
           for (reduced_x, pixel) in p_it {
             // None
-            send_out_pixel(header, image_level, reduced_x, reduced_y, pixel, &mut op);
+            send_out_pixel(header, image_level, reduced_x, reduced_y, header.width, pixel, &mut op);
           }
         }
       }
