@@ -27,7 +27,7 @@
 //! equally to all three colors, converting an RGB image to grayscale isn't a
 //! plain average. Instead, there's some weighting, as follows:
 //! ```text
-//! Y = 0.299 * R + 0.587 * G + 0.114 * B
+//! Y = (0.299 * R) + (0.587 * G) + (0.114 * B)
 //! ```
 //! (Remember, this is a linear color transformation, so if the source and/or
 //! destination values aren't linear then you will also need to do that
