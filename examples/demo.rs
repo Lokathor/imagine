@@ -9,7 +9,7 @@ use imagine::{
     netpbm_trim_comments_and_whitespace, NetpbmChannels, NetpbmError,
   },
   png::*,
-  BulkenIter, RGB16_BE, RGB8, RGBA16_BE, RGBA8, Y16_BE, Y8, YA16_BE, YA8,
+  BulkenIter, RGB8, RGBA8, Y8, YA8,
 };
 use pixels::{wgpu::Color, Error, Pixels, SurfaceTexture};
 use std::{ffi::OsStr, mem::size_of};
@@ -180,8 +180,13 @@ fn parse_me_a_png_yo(png: &[u8]) -> Result<(Vec<RGBA8>, u32, u32), PngError> {
       // TODO: some day we might want to display the full 16-bit channels, WGPU
       // supports it, we think.
       unfilter_decompressed_data(ihdr, &mut temp_memory_buffer, |x, y, data| {
-        let rgba16_be: RGBA16_BE = bytemuck::cast_slice(data)[0];
-        let rgba8 = rgba16_be_to_rgba8(rgba16_be);
+        let rgba16: [u16; 4] = [
+          u16::from_be_bytes([data[0], data[1]]),
+          u16::from_be_bytes([data[2], data[3]]),
+          u16::from_be_bytes([data[4], data[5]]),
+          u16::from_be_bytes([data[6], data[7]]),
+        ];
+        let rgba8 = rgba16_to_rgba8(rgba16);
         final_storage[(y * ihdr.width + x) as usize] = rgba8;
       })?
     }
@@ -201,10 +206,14 @@ fn parse_me_a_png_yo(png: &[u8]) -> Result<(Vec<RGBA8>, u32, u32), PngError> {
     }
     PngPixelFormat::RGB16 => {
       unfilter_decompressed_data(ihdr, &mut temp_memory_buffer, |x, y, data| {
-        let rgb16_be: RGB16_BE = bytemuck::cast_slice(data)[0];
-        let mut rgba8 = rgb16_be_to_rgba8(rgb16_be);
-        if let Some(rgb16_be_trns_key) = transparency.and_then(tRNS::to_rgb16_be) {
-          if rgb16_be == rgb16_be_trns_key {
+        let rgb16: [u16; 3] = [
+          u16::from_be_bytes([data[0], data[1]]),
+          u16::from_be_bytes([data[2], data[3]]),
+          u16::from_be_bytes([data[4], data[5]]),
+        ];
+        let mut rgba8 = rgb16_to_rgba8(rgb16);
+        if let Some(rgb16_trns_key) = transparency.and_then(tRNS::rgb) {
+          if rgb16 == rgb16_trns_key {
             rgba8.a = 0;
           }
         };
@@ -263,9 +272,9 @@ fn parse_me_a_png_yo(png: &[u8]) -> Result<(Vec<RGBA8>, u32, u32), PngError> {
     }
     PngPixelFormat::Y16 => {
       unfilter_decompressed_data(ihdr, &mut temp_memory_buffer, |x, y, data| {
-        let y16: Y16_BE = bytemuck::cast_slice(data)[0];
-        let mut rgba8 = y8_to_rgba8(y16.y[0]);
-        if let Some(y16_trns_key) = transparency.and_then(tRNS::to_y16_be) {
+        let y16: u16 = u16::from_be_bytes(data.try_into().unwrap());
+        let mut rgba8 = y8_to_rgba8((y16 >> 8) as u8);
+        if let Some(y16_trns_key) = transparency.and_then(tRNS::y) {
           if y16 == y16_trns_key {
             rgba8.a = 0;
           }
@@ -285,9 +294,10 @@ fn parse_me_a_png_yo(png: &[u8]) -> Result<(Vec<RGBA8>, u32, u32), PngError> {
     }
     PngPixelFormat::YA16 => {
       unfilter_decompressed_data(ihdr, &mut temp_memory_buffer, |x, y, data| {
-        let ya16_be: YA16_BE = bytemuck::cast_slice(data)[0];
-        let mut rgba8 = y8_to_rgba8(ya16_be.y[0]);
-        rgba8.a = ya16_be.a[0];
+        let ya16: [u16; 2] =
+          [u16::from_be_bytes([data[0], data[1]]), u16::from_be_bytes([data[2], data[3]])];
+        let mut rgba8 = y8_to_rgba8((ya16[0] >> 8) as u8);
+        rgba8.a = (ya16[1] >> 8) as u8;
         final_storage[(y * ihdr.width + x) as usize] = rgba8;
       })?
     }
@@ -345,12 +355,17 @@ fn rgb8_to_rgba8(rgb8: RGB8) -> RGBA8 {
   RGBA8 { r: rgb8.r, g: rgb8.g, b: rgb8.b, a: 0xFF }
 }
 
-fn rgba16_be_to_rgba8(rgba16_be: RGBA16_BE) -> RGBA8 {
-  RGBA8 { r: rgba16_be.r[0], g: rgba16_be.g[0], b: rgba16_be.b[0], a: rgba16_be.a[0] }
+fn rgba16_to_rgba8(rgba16: [u16; 4]) -> RGBA8 {
+  RGBA8 {
+    r: (rgba16[0] >> 8) as u8,
+    g: (rgba16[1] >> 8) as u8,
+    b: (rgba16[2] >> 8) as u8,
+    a: (rgba16[3] >> 8) as u8,
+  }
 }
 
-fn rgb16_be_to_rgba8(rgb16_be: RGB16_BE) -> RGBA8 {
-  RGBA8 { r: rgb16_be.r[0], g: rgb16_be.g[0], b: rgb16_be.b[0], a: 0xFF }
+fn rgb16_to_rgba8(rgb16: [u16; 3]) -> RGBA8 {
+  RGBA8 { r: (rgb16[0] >> 8) as u8, g: (rgb16[1] >> 8) as u8, b: (rgb16[2] >> 8) as u8, a: 0xFF }
 }
 
 // TODO: when we move the bmp parsing into the crate itself, delete this extra

@@ -1,6 +1,6 @@
 use bytemuck::cast_slice;
 
-use crate::{pixel_formats::RGB8, SrgbIntent, RGB16_BE, Y16_BE, Y8};
+use crate::{pixel_formats::RGB8, SrgbIntent, Y8};
 
 use super::*;
 
@@ -603,6 +603,25 @@ pub enum tRNS<'b> {
   Index { data: &'b [u8] },
 }
 impl<'b> tRNS<'b> {
+  /// Gets the `y` value, if this is a `Y` tag.
+  #[inline]
+  #[must_use]
+  pub const fn y(self) -> Option<u16> {
+    match self {
+      Self::Y { y } => Some(y),
+      _ => None,
+    }
+  }
+  /// Gets the `rgb` value, if this is a `RGB` tag.
+  #[inline]
+  #[must_use]
+  pub const fn rgb(self) -> Option<[u16; 3]> {
+    match self {
+      Self::RGB { r, g, b } => Some([r, g, b]),
+      _ => None,
+    }
+  }
+
   /// Convert a `tRNS::Y` back to the index bytes.
   ///
   /// Gives `None` if this isn't the `Y` variant.
@@ -642,34 +661,12 @@ impl<'b> tRNS<'b> {
     }
   }
 
-  /// Converts this value into an [RGB16_BE] value if it's an `RGB` tag.
-  #[inline]
-  #[must_use]
-  pub const fn to_rgb16_be(self) -> Option<RGB16_BE> {
-    match self {
-      Self::RGB { r, g, b } => {
-        Some(RGB16_BE { r: r.to_be_bytes(), g: g.to_be_bytes(), b: b.to_be_bytes() })
-      }
-      _ => None,
-    }
-  }
-
   /// Converts this value into a [Y8] value if it's a `Y` tag.
   #[inline]
   #[must_use]
   pub const fn to_y8(self) -> Option<Y8> {
     match self {
       Self::Y { y } => Some(Y8 { y: y as u8 }),
-      _ => None,
-    }
-  }
-
-  /// Converts this value into a [Y16_BE] value if it's a `Y` tag.
-  #[inline]
-  #[must_use]
-  pub const fn to_y16_be(self) -> Option<Y16_BE> {
-    match self {
-      Self::Y { y } => Some(Y16_BE { y: y.to_be_bytes() }),
       _ => None,
     }
   }
