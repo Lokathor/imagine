@@ -19,11 +19,9 @@
 
 ## Status
 
-* `png` and `bmp` can both be decoded properly without `imagine` allocating. The
-  "simple" API for doing so is not yet developed. This means that currently you
-  need quite a bit of knowledge about the details of each format to actually
-  decode an image. See the `demo` example if you want to try and understand how
-  things work (though the `demo` doesn't yet handle all cases either...).
+* The following formats can be decoded, though the "easy" API for doing this
+  isn't written yet:
+  * `png`, `bmp`, Netpbm files.
 * Changes are expected to break things in upcoming versions! We're `0.0.z` for a
   reason.
 
