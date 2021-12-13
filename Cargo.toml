@@ -1,6 +1,6 @@
 [package]
 name = "imagine"
-version = "0.0.7"
+version = "0.0.8"
 authors = ["Lokathor <zefria@gmail.com>"]
 edition = "2021"
 license = "Zlib OR Apache-2.0 OR MIT"
