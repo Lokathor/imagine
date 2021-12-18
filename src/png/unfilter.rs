@@ -238,11 +238,11 @@ where
     for (reduced_y, f, pixels) in row_iter {
       let mut p_it =
         pixels.chunks_exact_mut(filter_chunk_size).enumerate().map(|(r_x, d)| (r_x as u32, d));
-      let mut b_it = b_pixels.chunks_exact(filter_chunk_size);
+      let b_it = b_pixels.chunks_exact(filter_chunk_size);
       match f {
         1 => {
           // Sub
-          let (reduced_x, mut pixel): (u32, &mut [u8]) = p_it.next().unwrap();
+          let (reduced_x, pixel): (u32, &mut [u8]) = p_it.next().unwrap();
           send_out_pixel(header, image_level, reduced_x, reduced_y, header.width, pixel, &mut op);
           let mut a_pixel = pixel;
           while let Some((reduced_x, pixel)) = p_it.next() {

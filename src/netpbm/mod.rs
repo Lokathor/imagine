@@ -227,8 +227,8 @@ pub fn netpbm_break_tag(netpbm: &[u8]) -> Result<(NetpbmTag, &[u8]), NetpbmError
     [b'P', b'6', rest @ ..] => (NetpbmTag::P6, rest),
     [b'P', b'7', rest @ ..] => (NetpbmTag::P7, rest),
     [b'P', b'f', rest @ ..] => (NetpbmTag::Pf, rest),
-    [b'P', b'F', rest @ ..] => (NetpbmTag::PF, rest),
     [b'P', b'F', b'4', rest @ ..] => (NetpbmTag::PF4, rest),
+    [b'P', b'F', rest @ ..] => (NetpbmTag::PF, rest),
     _ => return Err(NetpbmError::NoTagPresent),
   })
 }
@@ -237,9 +237,9 @@ pub fn netpbm_read_ascii_unsigned(bytes: &[u8]) -> Result<(u32, &[u8]), NetpbmEr
   let (digits, rest) =
     bytes.split_at(bytes.iter().position(|u| u.is_ascii_whitespace()).unwrap_or(bytes.len()));
   let u: u32 = core::str::from_utf8(digits)
-    .map_err(|e| NetpbmError::CouldNotParseUnsigned)?
+    .map_err(|_| NetpbmError::CouldNotParseUnsigned)?
     .parse()
-    .map_err(|e| NetpbmError::CouldNotParseUnsigned)?;
+    .map_err(|_| NetpbmError::CouldNotParseUnsigned)?;
   Ok((u, rest))
 }
 
@@ -247,8 +247,8 @@ pub fn netpbm_read_ascii_float(bytes: &[u8]) -> Result<(f32, &[u8]), NetpbmError
   let (digits, rest) =
     bytes.split_at(bytes.iter().position(|u| u.is_ascii_whitespace()).unwrap_or(bytes.len()));
   let f: f32 = core::str::from_utf8(digits)
-    .map_err(|e| NetpbmError::CouldNotParseUnsigned)?
+    .map_err(|_| NetpbmError::CouldNotParseUnsigned)?
     .parse()
-    .map_err(|e| NetpbmError::CouldNotParseUnsigned)?;
+    .map_err(|_| NetpbmError::CouldNotParseUnsigned)?;
   Ok((f, rest))
 }

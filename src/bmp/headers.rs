@@ -783,7 +783,7 @@ impl TryFrom<[u8; 52]> for BmpInfoHeaderV2 {
     let size = u32_le(&a[0..4]);
     let width = i32_le(&a[4..8]);
     let height = i32_le(&a[8..12]);
-    let color_planes = u16_le(&a[12..14]);
+    let _color_planes = u16_le(&a[12..14]);
     let bits_per_pixel = u16_le(&a[14..16]);
     let compression = BmpCompression::try_from(u32_le(&a[16..20]))?;
     let image_byte_size = onz_u32_le(&a[20..24]);
@@ -1392,7 +1392,7 @@ impl TryFrom<[u8; 124]> for BmpInfoHeaderV5 {
     let size = u32_le(&a[0..4]);
     let width = i32_le(&a[4..8]);
     let height = i32_le(&a[8..12]);
-    let color_planes = u16_le(&a[12..14]);
+    let _color_planes = u16_le(&a[12..14]);
     let bits_per_pixel = u16_le(&a[14..16]);
     let compression = BmpCompression::try_from(u32_le(&a[16..20]))?;
     let image_byte_size = onz_u32_le(&a[20..24]);
