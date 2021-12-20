@@ -94,3 +94,7 @@ pub struct RGBA8 {
 }
 unsafe impl Zeroable for RGBA8 {}
 unsafe impl Pod for RGBA8 {}
+impl RGBA8 {
+  pub const WHITE: Self = RGBA8 { r: 255, g: 255, b: 255, a: 255 };
+  pub const BLACK: Self = RGBA8 { r: 0, g: 0, b: 0, a: 255 };
+}
