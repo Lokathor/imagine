@@ -9,7 +9,7 @@ description = "A crate to help with images."
 
 [features]
 default = []
-alloc = ["tagged_bytes/alloc"]
+alloc = []
 all-formats = ["png", "bmp", "netpbm"]
 
 # Portable Network Graphics
@@ -24,7 +24,6 @@ netpbm = []
 [dependencies]
 bytemuck = "1"
 miniz_oxide = { version = "0.5", default-features = false, optional = true }
-tagged_bytes = "0.0.1"
 
 [dev-dependencies]
 #pixels = "0.8"
