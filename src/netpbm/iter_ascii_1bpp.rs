@@ -3,7 +3,7 @@ use super::{netpbm_trim_comments_and_whitespace, NetpbmError};
 /// Parses 1bpp ascii entries.
 ///
 /// For the purposes of this parse whitespace and comments are skipped over as
-/// usual, but also whitespace is not even required between entries.
+/// usual, and in addition whitespace between entries is not required.
 /// * Each `b'0'` outputs as `Ok(false)`
 /// * Each `b'1'` outputs as `Ok(true)`
 /// * Any other un-skipped character in the output stream gives an error.

@@ -25,12 +25,21 @@
 mod iter_ascii_1bpp;
 pub use iter_ascii_1bpp::*;
 
-/// Parses for a netpbm header.
+mod iter_ascii_u8;
+pub use iter_ascii_u8::*;
+
+mod iter_ascii_u16;
+pub use iter_ascii_u16::*;
+
+mod automatic;
+pub use automatic::*;
+
+/// Parses for a netpbm header, along with the pixel data.
 ///
-/// * **Success:** Returns the header as well as the pixel data array. The
-///   appropriate way to parse the pixel data array depends upon the information
-///   in the header.
-/// * **Failure:** Returns the error value.
+/// * **Success:** Returns the header and pixel data slice. The header contains
+///   the dimensions of the image and a `NetpbmDataFormat` value that describes
+///   how you interpret the rest of the pixel data.
+/// * **Failure:** Returns the parsing error.
 pub fn netpbm_parse_header(netpbm: &[u8]) -> Result<(NetpbmHeader, &[u8]), NetpbmError> {
   const U8_MAX_AS_U32: u32 = u8::MAX as u32;
   const U16_MAX_AS_U32: u32 = u16::MAX as u32;
@@ -204,7 +213,7 @@ pub fn netpbm_parse_header(netpbm: &[u8]) -> Result<(NetpbmHeader, &[u8]), Netpb
               width,
               height,
               data_format: if max < 0.0 {
-                NetpbmDataFormat::Binary_Y_F32LE { max }
+                NetpbmDataFormat::Binary_Y_F32LE { max: -max }
               } else {
                 NetpbmDataFormat::Binary_Y_F32BE { max }
               },
@@ -221,7 +230,7 @@ pub fn netpbm_parse_header(netpbm: &[u8]) -> Result<(NetpbmHeader, &[u8]), Netpb
               width,
               height,
               data_format: if max < 0.0 {
-                NetpbmDataFormat::Binary_RGB_F32LE { max }
+                NetpbmDataFormat::Binary_RGB_F32LE { max: -max }
               } else {
                 NetpbmDataFormat::Binary_RGB_F32BE { max }
               },
@@ -238,7 +247,7 @@ pub fn netpbm_parse_header(netpbm: &[u8]) -> Result<(NetpbmHeader, &[u8]), Netpb
               width,
               height,
               data_format: if max < 0.0 {
-                NetpbmDataFormat::Binary_RGBA_F32LE { max }
+                NetpbmDataFormat::Binary_RGBA_F32LE { max: -max }
               } else {
                 NetpbmDataFormat::Binary_RGBA_F32BE { max }
               },

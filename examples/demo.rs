@@ -83,7 +83,7 @@ fn main() -> Result<(), Error> {
               return;
             }
           },
-          "pbm" | "pgm" | "ppm" | "pnm" | "pam" => match parse_me_a_netpbm_yo(&file_bytes) {
+          "pbm" | "pgm" | "ppm" | "pnm" | "pam" => match netpbm_automatic_rgba_image(&file_bytes) {
             Ok((rgba8, width, height)) => (rgba8, width, height),
             Err(e) => {
               eprintln!("Err parsing `{path_buf}`: {e:?}", path_buf = path_buf.display(), e = e);
@@ -878,30 +878,4 @@ fn parse_me_a_bmp_yo(bmp: &[u8]) -> Result<(Vec<RGBA8>, u32, u32), BmpError> {
   }
 
   Ok((final_storage, width as u32, height as u32))
-}
-
-fn parse_me_a_netpbm_yo(netpbm: &[u8]) -> Result<(Vec<RGBA8>, u32, u32), NetpbmError> {
-  println!("== Parsing a Netpbm file...");
-  //
-  let (header, pixel_data) = netpbm_parse_header(netpbm)?;
-  //
-  let pixel_count = header.width.saturating_mul(header.height) as usize;
-  let mut image: Vec<RGBA8> = Vec::new();
-  image.try_reserve(pixel_count)?;
-  //
-  match header.data_format {
-    NetpbmDataFormat::Ascii_Y_1bpp => {
-      NetpbmAscii1bppIter::new(pixel_data)
-        .take(pixel_count)
-        .filter_map(|r| r.ok())
-        .map(|b| if b { RGBA8::BLACK } else { RGBA8::WHITE })
-        .for_each(|color| image.push(color));
-    }
-    _ => todo!(),
-  }
-  if image.len() < pixel_count {
-    println!("We parsed only {} / {} pixels!", image.len(), pixel_count);
-    image.resize(pixel_count, RGBA8::BLACK);
-  }
-  Ok((image, header.width, header.height))
 }
