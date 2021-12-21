@@ -24,6 +24,7 @@ netpbm = []
 [dependencies]
 bytemuck = "1"
 miniz_oxide = { version = "0.5", default-features = false, optional = true }
+wide = "0.7"
 
 [dev-dependencies]
 #pixels = "0.8"

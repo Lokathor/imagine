@@ -31,7 +31,9 @@ pub use iter_ascii_u8::*;
 mod iter_ascii_u16;
 pub use iter_ascii_u16::*;
 
+#[cfg(feature = "alloc")]
 mod automatic;
+#[cfg(feature = "alloc")]
 pub use automatic::*;
 
 /// Parses for a netpbm header, along with the pixel data.
