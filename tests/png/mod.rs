@@ -1,4 +1,4 @@
-use imagine::png::RawPngChunkIter;
+use imagine::png::PngRawChunkIter;
 use walkdir::WalkDir;
 
 #[test]
@@ -13,14 +13,14 @@ fn test_RawPngChunkIter_no_panics() {
         continue;
       }
     };
-    for _ in RawPngChunkIter::new(&v) {
+    for _ in PngRawChunkIter::new(&v) {
       //
     }
   }
   // even totally random data should never panic the iterator!
   for _ in 0..10 {
     let v = super::rand_bytes(1024);
-    for _ in RawPngChunkIter::new(&v) {
+    for _ in PngRawChunkIter::new(&v) {
       //
     }
   }
