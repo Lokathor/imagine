@@ -18,6 +18,9 @@ bytemuck = "1.11"
 bitfrob = "0.2.1"
 miniz_oxide = { version = "0.5", default-features = false, optional = true }
 
+[dev-dependencies]
+walkdir = "2.3.2"
+
 [package.metadata.docs.rs]
 rustdoc-args = ["--cfg","docs_rs"]
 features = [
