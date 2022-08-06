@@ -4,4 +4,4 @@
 extern crate alloc;
 
 #[cfg(feature = "png")]
-mod png;
+pub mod png;
