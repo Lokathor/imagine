@@ -7,8 +7,7 @@ edition = "2021"
 license = "Zlib OR Apache-2.0 OR MIT"
 
 [features]
-default = ["alloc", "png"]
-alloc = []
+default = ["png"]
 png = ["miniz_oxide"] # Portable Network Graphics
 #bmp = [] # Windows Bitmap
 #netpbm = [] # Covers all the Netpbm files: pbm, pgm, ppm, pnm, pam
@@ -19,6 +18,7 @@ bitfrob = "0.2.1"
 miniz_oxide = { version = "0.5", default-features = false, optional = true }
 
 [dev-dependencies]
+getrandom = "0.2.7"
 walkdir = "2.3.2"
 
 [package.metadata.docs.rs]
