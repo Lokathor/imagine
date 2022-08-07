@@ -15,6 +15,40 @@
 //! be possible to create such a thing using the types provided in this module,
 //! but that's not an intended use case.
 //!
+//! ## Automatic Usage
+//!
+//! * TODO
+//!
+//! ## Manual Usage
+//!
+//! If you want full control over when allocations happen you can do that:
+//!
+//! 1) Call [`png_get_header`](png_get_header) to get the [`IHDR`] information
+//!    for the PNG. This describes the width, height, and pixel format.
+//! 2) Call
+//!    [`get_zlib_decompression_requirement`](IHDR::get_zlib_decompression_requirement)
+//!    to determine how much temporary space you'll need for the Zlib
+//!    decompression and obtain an appropriate buffer. Because of how PNG works
+//!    you *cannot* decompress directly to the final image buffer (other
+//!    non-image data is mixed in).
+//! 3) Call [`png_get_idat`](png_get_idat) to get an iterator over the
+//!    compressed image data slices. PNG allows for more than one `IDAT` chunk
+//!    within an image, and you should act like all `IDAT` chunks were a single
+//!    long slice for the purposes of decompression. It's suggested to use the
+//!    [`decompress_slice_iter_to_slice`](miniz_oxide::inflate::decompress_slice_iter_to_slice)
+//!    function, but any Zlib decompressor will work. This gives you *filtered*
+//!    data, not the final data you want.
+//! 4) Depending on your intended final pixel format, allocate an appropriate
+//!    buffer for the final image.
+//! 5) Call [`unfilter_decompressed_data`](IHDR::unfilter_decompressed_data) on
+//!    the decompressed data buffer to turn the decompressed but filtered data
+//!    into the actual final pixel data. You provide this function with a
+//!    closure `op(x, y, data)` that will be called once for each output pixel:
+//!    * Bit depths 1, 2, and 4 will have the value in the low bits of a single
+//!      byte slice.
+//!    * Bit depth 8 will have one byte per channel.
+//!    * Bit depth 16 will have two big-endian bytes per channel.
+//!
 //! ## Parsing Errors
 //!
 //! Quoting [section 13.2 of the PNG
@@ -41,7 +75,7 @@ use core::fmt::{Debug, Write};
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[repr(transparent)]
-pub struct PngRawChunkType([u8; 4]);
+struct PngRawChunkType([u8; 4]);
 impl PngRawChunkType {
   pub const IHDR: Self = Self(*b"IHDR");
   pub const PLTE: Self = Self(*b"PLTE");
@@ -188,16 +222,56 @@ pub struct IHDR {
   is_interlaced: bool,
 }
 impl IHDR {
-  /// Gets the buffer size required to perform Zlib decompression.
-  pub const fn get_zlib_decompression_requirement(&self) -> usize {
+  /// You can call this if you must, but it complicates the apparent API to have
+  /// it visible because most people don't ever need this.
+  #[doc(hidden)]
+  pub const fn bytes_per_filterline(&self, width: u32) -> usize {
     // each line is a filter byte (1) + pixel data. When pixels are less than 8
     // bits per channel it's possible to end up with partial bytes on the end,
     // so we must round up.
-    let bytes_per_line = 1 + ((self.bits_per_pixel() * (self.width as usize)) + 7) / 8;
-    bytes_per_line * (self.height as usize)
+    1 + ((self.bits_per_pixel() * (width as usize)) + 7) / 8
   }
 
-  /// bits per pixel = bit depth per channel * channels per pixel
+  /// Gets the buffer size required to perform Zlib decompression.
+  pub fn get_zlib_decompression_requirement(&self) -> usize {
+    /// Get the temp bytes for a given image.
+    ///
+    /// * Interlaced images will have to call this function for all 7 reduced
+    ///   images and then add up the values.
+    /// * Non-interlaced images call this function just once for their full
+    ///   dimensions.
+    #[inline]
+    #[must_use]
+    const fn temp_bytes_for_image(
+      width: u32, height: u32, color_type: PngColorType, bit_depth: u8,
+    ) -> usize {
+      if width == 0 {
+        return 0;
+      }
+      let bits_per_line: usize = color_type.channel_count().saturating_mul(bit_depth as usize);
+      let bytes_per_scanline: usize = bits_per_line.saturating_mul(8);
+      let bytes_per_filterline: usize = bytes_per_scanline.saturating_add(1);
+      bytes_per_filterline.saturating_mul(height as usize)
+    }
+    if self.is_interlaced {
+      let mut total = 0_usize;
+      for (width, height) in reduced_image_dimensions(self.width, self.height) {
+        total = total.saturating_add(temp_bytes_for_image(
+          width,
+          height,
+          self.color_type,
+          self.bit_depth,
+        ));
+      }
+      total
+    } else {
+      temp_bytes_for_image(self.width, self.height, self.color_type, self.bit_depth)
+    }
+  }
+
+  /// You can call this if you must, but it complicates the apparent API to have
+  /// it visible because most people don't ever need this.
+  #[doc(hidden)]
   pub const fn bits_per_pixel(&self) -> usize {
     (self.bit_depth as usize) * self.color_type.channel_count()
   }
@@ -337,20 +411,6 @@ pub fn png_get_palette(bytes: &[u8]) -> Option<&[[u8; 3]]> {
 }
 
 /// Gets an iterator over all the [IDAT] slices in the PNG bytes.
-///
-/// The intended use is to:
-///
-/// 1) Determine how much buffer space you need to decompress the `IDAT` by
-///    grabbing the [IHDR] for this image and then calling
-///    [`get_zlib_decompression_requirement`](IHDR::get_zlib_decompression_requirement).
-/// 2) Decompress the `IDAT` to an appropriately large buffer using
-///    [`decompress_slice_iter_to_slice`](miniz_oxide::inflate::decompress_slice_iter_to_slice)
-///    and passing it this iterator. You could use any other Zlib implementation
-///    I guess, but the `miniz_oxide` crate is considered the "officially
-///    supported" decompressor.
-///
-/// Those steps get you the *filtered* bytes of your PNG. You must still
-/// unfilter, and possibly de-interlace, the data before it'll be useful!
 pub fn png_get_idat(bytes: &[u8]) -> impl Iterator<Item = &[u8]> {
   PngRawChunkIter::new(bytes).filter_map(|raw_chunk| {
     let png_chunk = PngChunk::try_from(raw_chunk).ok()?;
@@ -372,7 +432,7 @@ pub fn png_get_idat(bytes: &[u8]) -> impl Iterator<Item = &[u8]> {
 /// PS: Interlacing is terrible, don't interlace your images.
 #[inline]
 #[must_use]
-pub const fn reduced_image_dimensions(full_width: u32, full_height: u32) -> [(u32, u32); 8] {
+const fn reduced_image_dimensions(full_width: u32, full_height: u32) -> [(u32, u32); 8] {
   // ```
   // 1 6 4 6 2 6 4 6
   // 7 7 7 7 7 7 7 7
@@ -491,15 +551,140 @@ fn test_reduced_image_dimensions() {
   );
 }
 
+/// Converts a reduced image location into the full image location.
+///
+/// For consistency between this function and the [reduced_image_dimensions]
+/// function, when giving an `image_level` of 0 the output will be the same as
+/// the input.
+///
+/// ## Panics
+/// * If the image level given exceeds 7.
+#[inline]
+#[must_use]
+const fn interlaced_pos_to_full_pos(
+  image_level: usize, reduced_x: u32, reduced_y: u32,
+) -> (u32, u32) {
+  // ```
+  // 1 6 4 6 2 6 4 6
+  // 7 7 7 7 7 7 7 7
+  // 5 6 5 6 5 6 5 6
+  // 7 7 7 7 7 7 7 7
+  // 3 6 4 6 3 6 4 6
+  // 7 7 7 7 7 7 7 7
+  // 5 6 5 6 5 6 5 6
+  // 7 7 7 7 7 7 7 7
+  // ```
+  match image_level {
+    0 /* full image */ => (reduced_x, reduced_y),
+    1 => (reduced_x * 8 + 0, reduced_y * 8 + 0),
+    2 => (reduced_x * 8 + 4, reduced_y * 8 + 0),
+    3 => (reduced_x * 4 + 0, reduced_y * 8 + 4),
+    4 => (reduced_x * 4 + 2, reduced_y * 4 + 0),
+    5 => (reduced_x * 2 + 0, reduced_y * 4 + 2),
+    6 => (reduced_x * 2 + 1, reduced_y * 2 + 0),
+    7 => (reduced_x * 1 + 0, reduced_y * 2 + 1),
+    _ => panic!("reduced image level must be 1 through 7")
+  }
+}
+
 impl IHDR {
-  /// Unfilters data from the zlib decompression buffer.
+  fn send_out_pixel<F: FnMut(u32, u32, &[u8])>(
+    &self, image_level: usize, reduced_x: u32, reduced_y: u32, data: &[u8], op: &mut F,
+  ) {
+    let full_width = self.width;
+    match self.bit_depth {
+      1 => {
+        let full_data: u8 = data[0];
+        let mut mask = 0b1000_0000;
+        let mut down_shift = 7;
+        for plus_x in 0..8 {
+          let (image_x, image_y) =
+            interlaced_pos_to_full_pos(image_level, reduced_x * 8 + plus_x, reduced_y);
+          if image_x >= full_width {
+            // if we've gone outside the image's bounds then we're looking at
+            // padding bits and we cancel the rest of the outputs in this
+            // call of the function.
+            return;
+          }
+          op(image_x as u32, image_y as u32, &[(full_data & mask) >> down_shift]);
+          mask >>= 1;
+          down_shift -= 1;
+        }
+      }
+      2 => {
+        let full_data: u8 = data[0];
+        let mut mask = 0b1100_0000;
+        let mut down_shift = 6;
+        for plus_x in 0..4 {
+          let (image_x, image_y) =
+            interlaced_pos_to_full_pos(image_level, reduced_x * 4 + plus_x, reduced_y);
+          if image_x >= full_width {
+            // if we've gone outside the image's bounds then we're looking at
+            // padding bits and we cancel the rest of the outputs in this
+            // call of the function.
+            return;
+          }
+          op(image_x as u32, image_y as u32, &[(full_data & mask) >> down_shift]);
+          mask >>= 2;
+          down_shift -= 2;
+        }
+      }
+      4 => {
+        let full_data: u8 = data[0];
+        let mut mask = 0b1111_0000;
+        let mut down_shift = 4;
+        for plus_x in 0..2 {
+          let (image_x, image_y) =
+            interlaced_pos_to_full_pos(image_level, reduced_x * 2 + plus_x, reduced_y);
+          if image_x >= full_width {
+            // if we've gone outside the image's bounds then we're looking at
+            // padding bits and we cancel the rest of the outputs in this
+            // call of the function.
+            return;
+          }
+          op(image_x as u32, image_y as u32, &[(full_data & mask) >> down_shift]);
+          mask >>= 4;
+          down_shift -= 4;
+        }
+      }
+      8 | 16 => {
+        let (image_x, image_y) = interlaced_pos_to_full_pos(image_level, reduced_x, reduced_y);
+        op(image_x as u32, image_y as u32, data);
+      }
+      _ => unreachable!(),
+    }
+  }
+}
+
+#[inline]
+#[must_use]
+const fn paeth_predict(a: u8, b: u8, c: u8) -> u8 {
+  let a_ = a as i32;
+  let b_ = b as i32;
+  let c_ = c as i32;
+  let p: i32 = a_ + b_ - c_;
+  let pa = (p - a_).abs();
+  let pb = (p - b_).abs();
+  let pc = (p - c_).abs();
+  // Note(Lokathor): The PNG spec is extremely specific that you shall not,
+  // under any circumstances, alter the order of evaluation of this
+  // expression's tests.
+  if pa <= pb && pa <= pc {
+    a
+  } else if pb <= pc {
+    b
+  } else {
+    c
+  }
+}
+
+impl IHDR {
+  /// Unfilters data from the zlib decompression buffer into the final
+  /// destination.
   ///
-  /// ## Errors
-  /// Possible errors include:
-  /// * if `width` or `height` is 0.
-  /// * if the `bit_depth` is illegal for the specified color type.
+  /// See the [`png` module docs](crate::png) for guidance.
   pub fn unfilter_decompressed_data<F>(
-    &self, mut decompressed: &mut [u8], mut out_op: F,
+    &self, mut decompressed: &mut [u8], mut op: F,
   ) -> Result<(), ()>
   where
     F: FnMut(u32, u32, &[u8]),
@@ -542,6 +727,201 @@ impl IHDR {
       image_it.next();
     }
 
-    Err(())
+    // From now on we're "always" working with reduced images because we've
+    // re-stated the non-interlaced scenario as being just a form of interlaced
+    // data, which means we can stop thinking about the difference between if
+    // we're interlaced or not. yay!
+    for (image_level, reduced_width, reduced_height) in image_it {
+      if reduced_width == 0 || reduced_height == 0 {
+        // while the full image's width and height must not be 0, the width or
+        // height of any particular reduced image might still be 0. In that case, we
+        // just continue on.
+        continue;
+      }
+
+      let bytes_per_filterline = self.bytes_per_filterline(reduced_width);
+      let bytes_used_this_image = bytes_per_filterline.saturating_mul(reduced_height as _);
+
+      let mut row_iter = if decompressed.len() < bytes_used_this_image {
+        return Err(());
+      } else {
+        let (these_bytes, more_bytes) = decompressed.split_at_mut(bytes_used_this_image);
+        decompressed = more_bytes;
+        these_bytes
+          .chunks_exact_mut(bytes_per_filterline)
+          .map(|chunk| {
+            let (f, pixels) = chunk.split_at_mut(1);
+            (&mut f[0], pixels)
+          })
+          .enumerate()
+          .take(reduced_height as usize)
+          .map(|(r_y, (f, pixels))| (r_y as u32, f, pixels))
+      };
+
+      // The first line of each image has special handling because filters can
+      // refer to the previous line, but for the first line the "previous line" is
+      // an implied zero.
+      let mut b_pixels = if let Some((reduced_y, f, pixels)) = row_iter.next() {
+        let mut p_it =
+          pixels.chunks_exact_mut(filter_chunk_size).enumerate().map(|(r_x, d)| (r_x as u32, d));
+        match f {
+          1 => {
+            // Sub
+            let (reduced_x, pixel): (u32, &mut [u8]) = p_it.next().unwrap();
+            self.send_out_pixel(image_level, reduced_x, reduced_y, pixel, &mut op);
+            let mut a_pixel = pixel;
+            while let Some((reduced_x, pixel)) = p_it.next() {
+              a_pixel
+                .iter()
+                .copied()
+                .zip(pixel.iter_mut())
+                .for_each(|(a, p)| *p = p.wrapping_add(a));
+              self.send_out_pixel(image_level, reduced_x, reduced_y, pixel, &mut op);
+              //
+              a_pixel = pixel;
+            }
+          }
+          3 => {
+            // Average
+            let (reduced_x, pixel): (u32, &mut [u8]) = p_it.next().unwrap();
+            self.send_out_pixel(image_level, reduced_x, reduced_y, pixel, &mut op);
+            let mut a_pixel = pixel;
+            while let Some((reduced_x, pixel)) = p_it.next() {
+              // the `b` is always 0, so we elide it from the computation
+              a_pixel
+                .iter()
+                .copied()
+                .zip(pixel.iter_mut())
+                .for_each(|(a, p)| *p = p.wrapping_add(a / 2));
+              self.send_out_pixel(image_level, reduced_x, reduced_y, pixel, &mut op);
+              //
+              a_pixel = pixel;
+            }
+          }
+          4 => {
+            // Paeth
+            let (reduced_x, pixel): (u32, &mut [u8]) = p_it.next().unwrap();
+            self.send_out_pixel(image_level, reduced_x, reduced_y, pixel, &mut op);
+            let mut a_pixel = pixel;
+            while let Some((reduced_x, pixel)) = p_it.next() {
+              // the `b` and `c` are both always 0
+              a_pixel
+                .iter()
+                .copied()
+                .zip(pixel.iter_mut())
+                .for_each(|(a, p)| *p = p.wrapping_add(paeth_predict(a, 0, 0)));
+              self.send_out_pixel(image_level, reduced_x, reduced_y, pixel, &mut op);
+              //
+              a_pixel = pixel;
+            }
+          }
+          _ => {
+            for (reduced_x, pixel) in p_it {
+              // None and Up
+              self.send_out_pixel(image_level, reduced_x, reduced_y, pixel, &mut op);
+            }
+          }
+        }
+        *f = 0;
+        pixels
+      } else {
+        unreachable!("we already know that this image is at least 1 row");
+      };
+
+      // Now that we have a previous line worth of data, all the filters will work
+      // normally for the rest of the image.
+      for (reduced_y, f, pixels) in row_iter {
+        let mut p_it =
+          pixels.chunks_exact_mut(filter_chunk_size).enumerate().map(|(r_x, d)| (r_x as u32, d));
+        let b_it = b_pixels.chunks_exact(filter_chunk_size);
+        match f {
+          1 => {
+            // Sub filter
+            let (reduced_x, pixel): (u32, &mut [u8]) = p_it.next().unwrap();
+            self.send_out_pixel(image_level, reduced_x, reduced_y, pixel, &mut op);
+            let mut a_pixel = pixel;
+            while let Some((reduced_x, pixel)) = p_it.next() {
+              a_pixel
+                .iter()
+                .copied()
+                .zip(pixel.iter_mut())
+                .for_each(|(a, p)| *p = p.wrapping_add(a));
+              self.send_out_pixel(image_level, reduced_x, reduced_y, pixel, &mut op);
+              //
+              a_pixel = pixel;
+            }
+          }
+          2 => {
+            // Up filter
+            for ((reduced_x, pixel), b_pixel) in p_it.zip(b_it) {
+              b_pixel
+                .iter()
+                .copied()
+                .zip(pixel.iter_mut())
+                .for_each(|(b, p)| *p = p.wrapping_add(b));
+              //
+              self.send_out_pixel(image_level, reduced_x, reduced_y, pixel, &mut op);
+            }
+          }
+          3 => {
+            // Average filter
+            let mut pb_it = p_it.zip(b_it).map(|((r_x, p), b)| (r_x, p, b));
+            let (reduced_x, pixel, b_pixel) = pb_it.next().unwrap();
+            pixel
+              .iter_mut()
+              .zip(b_pixel.iter().copied())
+              .for_each(|(p, b)| *p = p.wrapping_add(b / 2));
+            self.send_out_pixel(image_level, reduced_x, reduced_y, pixel, &mut op);
+            let mut a_pixel: &[u8] = pixel;
+            while let Some((reduced_x, pixel, b_pixel)) = pb_it.next() {
+              a_pixel.iter().copied().zip(b_pixel.iter().copied()).zip(pixel.iter_mut()).for_each(
+                |((a, b), p)| {
+                  *p = p.wrapping_add(((a as u32 + b as u32) / 2) as u8);
+                },
+              );
+              self.send_out_pixel(image_level, reduced_x, reduced_y, pixel, &mut op);
+              //
+              a_pixel = pixel;
+            }
+          }
+          4 => {
+            // Paeth filter
+            let mut pb_it = p_it.zip(b_it).map(|((r_x, p), b)| (r_x, p, b));
+            let (reduced_x, pixel, b_pixel) = pb_it.next().unwrap();
+            pixel.iter_mut().zip(b_pixel.iter().copied()).for_each(|(p, b)| {
+              *p = p.wrapping_add(paeth_predict(0, b, 0));
+            });
+            self.send_out_pixel(image_level, reduced_x, reduced_y, pixel, &mut op);
+            let mut a_pixel = pixel;
+            let mut c_pixel = b_pixel;
+            while let Some((reduced_x, pixel, b_pixel)) = pb_it.next() {
+              a_pixel
+                .iter()
+                .copied()
+                .zip(b_pixel.iter().copied())
+                .zip(c_pixel.iter().copied())
+                .zip(pixel.iter_mut())
+                .for_each(|(((a, b), c), p)| {
+                  *p = p.wrapping_add(paeth_predict(a, b, c));
+                });
+              self.send_out_pixel(image_level, reduced_x, reduced_y, pixel, &mut op);
+              //
+              a_pixel = pixel;
+              c_pixel = b_pixel;
+            }
+          }
+          _ => {
+            for (reduced_x, pixel) in p_it {
+              // No Filter, or unknown filter, have no alterations.
+              self.send_out_pixel(image_level, reduced_x, reduced_y, pixel, &mut op);
+            }
+          }
+        }
+        b_pixels = pixels;
+      }
+    }
+
+    //
+    Ok(())
   }
 }
