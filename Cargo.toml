@@ -15,7 +15,7 @@ png = ["miniz_oxide"] # Portable Network Graphics
 [dependencies]
 bytemuck = "1.11"
 bitfrob = "0.2.1"
-miniz_oxide = { version = "0.5", default-features = false, optional = true }
+miniz_oxide = { version = "0.5.3", default-features = false, optional = true }
 
 [dev-dependencies]
 getrandom = "0.2.7"
