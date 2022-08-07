@@ -654,31 +654,7 @@ impl IHDR {
       _ => unreachable!(),
     }
   }
-}
 
-#[inline]
-#[must_use]
-const fn paeth_predict(a: u8, b: u8, c: u8) -> u8 {
-  let a_ = a as i32;
-  let b_ = b as i32;
-  let c_ = c as i32;
-  let p: i32 = a_ + b_ - c_;
-  let pa = (p - a_).abs();
-  let pb = (p - b_).abs();
-  let pc = (p - c_).abs();
-  // Note(Lokathor): The PNG spec is extremely specific that you shall not,
-  // under any circumstances, alter the order of evaluation of this
-  // expression's tests.
-  if pa <= pb && pa <= pc {
-    a
-  } else if pb <= pc {
-    b
-  } else {
-    c
-  }
-}
-
-impl IHDR {
   /// Unfilters data from the zlib decompression buffer into the final
   /// destination.
   ///
@@ -689,6 +665,28 @@ impl IHDR {
   where
     F: FnMut(u32, u32, &[u8]),
   {
+    #[inline]
+    #[must_use]
+    const fn paeth_predict(a: u8, b: u8, c: u8) -> u8 {
+      let a_ = a as i32;
+      let b_ = b as i32;
+      let c_ = c as i32;
+      let p: i32 = a_ + b_ - c_;
+      let pa = (p - a_).abs();
+      let pb = (p - b_).abs();
+      let pc = (p - c_).abs();
+      // Note(Lokathor): The PNG spec is extremely specific that you shall not,
+      // under any circumstances, alter the order of evaluation of this
+      // expression's tests.
+      if pa <= pb && pa <= pc {
+        a
+      } else if pb <= pc {
+        b
+      } else {
+        c
+      }
+    }
+
     if self.width == 0 || self.height == 0 {
       return Err(());
     }
