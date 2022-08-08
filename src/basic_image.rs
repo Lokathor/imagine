@@ -7,8 +7,7 @@ use core::ops::{Index, IndexMut};
 
 use alloc::vec::Vec;
 
-/// Four channel color, RGBA, 8 bits per channel.
-pub type RGBA8 = [u8; 4];
+use crate::RGBA8;
 
 /// A basic containers for [RGBA8] data.
 ///
