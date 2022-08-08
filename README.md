@@ -1,39 +1,13 @@
-[![License:Zlib](https://img.shields.io/badge/License-Zlib-brightgreen.svg)](https://opensource.org/licenses/Zlib)
-[![crates.io](https://img.shields.io/crates/v/imagine.svg)](https://crates.io/crates/imagine)
-[![docs.rs](https://docs.rs/imagine/badge.svg)](https://docs.rs/imagine/)
 
-# imagine
+* **[Latest Docs.rs](https://docs.rs/imagine/)**
 
-## Goals
+# `imagine`
 
-* To provide image format **decoders** for various image formats:
-  * Decoders should be *possible* to use without `imagine` doing any allocation
-    (the user provides any necessary buffers).
-  * Decoders should be *simple* to use when `imagine` is allowed to allocate for
-    you. Functions to "just get me the RGBA8 pixels", and things like that.
-* To provide image format **encoders** for various image formats:
-  * Depending on format, a low-compression or no-compression encoder will likely
-    be available even without `imagine` being allowed to allocate.
-  * Depending on format, a good compressor will be available when `imagine` is
-    allowed to allocate.
-
-## Status
-
-* The following formats can be decoded, though the "easy" API for doing this
-  isn't written yet:
-  * `png`, `bmp`, Netpbm files.
-* Changes are expected to break things in upcoming versions! We're `0.0.z` for a
-  reason.
-
-There's many places for improvement, file PRs if you like!
+* Can parse PNG files
 
 ## License
 
-All the code and docs are licensed as given in the `Cargo.toml` file.
+All the code and docs are licensed `Zlib OR Apache-2.0 OR MIT`, as given in the
+`Cargo.toml` file.
 
-**However,** this repository also contains a number of test images (within the
-`tests/` directory), many of which are used under various other permissive
-licenses. In this case, each folder of images will have a file giving the
-license information. Since this library's test data is not included in your own
-program when you use the crate as a dependency this should not generally be a
-concern.
+Testing images, in the `tests/` folder, have alternate permissive licenses.
