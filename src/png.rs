@@ -338,7 +338,7 @@ impl<'b> TryFrom<PngChunk<'b>> for PLTE<'b> {
   }
 }
 impl Debug for PLTE<'_> {
-  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+  fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
     f.debug_tuple("PLTE").field(&&self.0[..self.0.len().min(4)]).field(&self.0.len()).finish()
   }
 }
@@ -368,7 +368,7 @@ impl<'b> TryFrom<PngChunk<'b>> for IDAT<'b> {
   }
 }
 impl Debug for IDAT<'_> {
-  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+  fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
     f.debug_tuple("IDAT").field(&&self.0[..self.0.len().min(12)]).field(&self.0.len()).finish()
   }
 }
