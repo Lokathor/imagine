@@ -113,6 +113,7 @@ fn main() {
       .with_title("Hello PNG")
       .with_inner_size(size)
       .with_min_inner_size(size)
+      .with_max_inner_size(size)
       .build(&event_loop)
       .unwrap()
   };
