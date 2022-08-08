@@ -59,32 +59,32 @@ fn main() {
       //return;
     }
   }
-  let mut final_buffer = vec![[0_u8; 3]; (ihdr.width * ihdr.height) as usize];
+  let mut final_buffer = vec![[0_u8; 4]; (ihdr.width * ihdr.height) as usize];
   let plte = png_get_palette(&bytes).unwrap_or(&[]);
   if let Err(_e) = ihdr.unfilter_decompressed_data(&mut zlib_buffer, |x, y, data| {
     //println!("x: {x}, y: {y}, data: {data:?}");
     if let Some(p) = final_buffer.get_mut(((y * ihdr.width) + x) as usize) {
       match ihdr.color_type {
         PngColorType::RGB => {
-          if ihdr.bit_depth == 16 {
-            *p = [data[0], data[2], data[4]];
+          let [r, g, b] = if ihdr.bit_depth == 16 {
+            [data[0], data[2], data[4]]
           } else {
-            *p = [data[0], data[1], data[2]];
-          }
+            [data[0], data[1], data[2]]
+          };
+          *p = [r, g, b, 255];
         }
         PngColorType::RGBA => {
-          let [r, g, b, _a] = if ihdr.bit_depth == 16 {
+          let [r, g, b, a] = if ihdr.bit_depth == 16 {
             [data[0], data[2], data[4], data[6]]
           } else {
             [data[0], data[1], data[2], data[3]]
           };
-          // TODO: handle alpha
-          *p = [r, g, b];
+          *p = [r, g, b, a];
         }
         PngColorType::YA => {
-          let [y, _a] = if ihdr.bit_depth == 16 { [data[0], data[2]] } else { [data[0], data[1]] };
+          let [y, a] = if ihdr.bit_depth == 16 { [data[0], data[2]] } else { [data[0], data[1]] };
           // TODO: handle alpha
-          *p = [y, y, y];
+          *p = [y, y, y, a];
         }
         PngColorType::Y => {
           let y = if ihdr.bit_depth == 16 {
@@ -92,10 +92,11 @@ fn main() {
           } else {
             u8_replicate_bits(ihdr.bit_depth as u32, data[0])
           };
-          *p = [y, y, y];
+          *p = [y, y, y, 255];
         }
         PngColorType::Index => {
-          *p = *plte.get(data[0] as usize).unwrap_or(&[0, 0, 0]);
+          let [r, g, b] = *plte.get(data[0] as usize).unwrap_or(&[0, 0, 0]);
+          *p = [r, g, b, 255];
         }
       }
     } else {
@@ -127,7 +128,7 @@ fn main() {
       Event::RedrawRequested(_) => {
         let frame = pixels.get_frame();
         let png_bytes: &[u8] = bytemuck::cast_slice(&final_buffer);
-        frame.iter_mut().zip(png_bytes.iter()).for_each(|(f, p)| *f = *p);
+        frame.copy_from_slice(png_bytes);
         if let Err(e) = pixels.render() {
           println!("Error during rendering: {e:?}");
           *control_flow = ControlFlow::Exit;
