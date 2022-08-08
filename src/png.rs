@@ -2,6 +2,10 @@
 
 //! Module for working with PNG data.
 //!
+//! * [Portable Network Graphics Specification (Second Edition)][png-spec]
+//!
+//! [png-spec]: https://www.w3.org/TR/2003/REC-PNG-20031110/
+//!
 //! ## Library Design Assumptions
 //!
 //! This library *can* run in a `no_alloc` scenario, using only user-provided
@@ -12,16 +16,19 @@
 //! * Each stage of the decoding process goes into a single output buffer which
 //!   must be large enough to fit all of the output of that stage at once.
 //!
-//! This library does *not* attempt to support "stream" decoding of PNG data in
-//! a way that keeps a minimal amount of data live during the decoding. It might
-//! be possible to create such a thing using the types provided in this module,
-//! but that's not an intended use case.
+//! This library does *not* attempt to support "stream" decoding of PNG data,
+//! keeping only a minimal amount of live data. It might be possible to create
+//! such a thing using the types provided in this module, but that's not an
+//! intended use case.
 //!
-//! ## Automatic Usage
+//! ## Automatic Decoding
 //!
-//! * TODO
+//! Just call [ImageRGBA8::from_png_bytes](crate::ImageRGBA8::from_png_bytes)
+//! and it'll do its best.
 //!
-//! ## Manual Usage
+//! This requires the `alloc` and `miniz_oxide` crate features.
+//!
+//! ## Manual Decoding
 //!
 //! If you want full control over when allocations happen you can do that:
 //!
@@ -64,14 +71,26 @@
 //! possibly can when parsing. Particularly, we ignore:
 //!
 //! * When the first 8 bytes of the data stream, marking it as PNG data, are
-//!   incorrect. You can call [`is_png_header_correct`] yourself if you want.
-//! * All the chunk ordering rules. All chunk processing is done via Iterator,
-//!   so it's trivial to filter past chunks that occur in an unexpected order.
+//!   incorrect. You can call [`is_png_header_correct`] yourself if you want to
+//!   check the PNG header. The [PngRawChunkIter] will just skip the first 8
+//!   bytes of input, regardless of if they're correct or not. If they're not
+//!   correct, you probably don't have PNG bytes, and the chunks that the
+//!   iterator produces will probably be nonsense, but won't break memory
+//!   safety, or even panic, so basically it's kinda fine.
+//! * All the chunk ordering rules. These exist to allow for potential PNG
+//!   stream processing, but this library assumes that all PNG data is in memory
+//!   at once anyway. This library processes chunks via Iterator, so it's fairly
+//!   trivial to `filter` past chunks that occur in an unexpected order.
 //! * Rules against duplicate chunks (you'll generally get the first one).
 //! * Both of the checksum systems (CRC32 checks on individual chunks, and
-//!   Adler32 checking on the Zlib compressed image data).
+//!   Adler32 checking on the Zlib compressed image data). These are basically
+//!   there because PNG comes from an era (1996) when disks and networks were a
+//!   lot less capable of preserving your data.
 
+use crate::RGBA8;
 use core::fmt::{Debug, Write};
+
+use bitfrob::u8_replicate_bits;
 
 // TODO: CRC support for raw chunks is needed
 
@@ -94,6 +113,7 @@ impl Debug for PngRawChunkType {
   }
 }
 
+/// An unparsed chunk from a PNG.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct PngRawChunk<'b> {
   type_: PngRawChunkType,
@@ -110,10 +130,12 @@ impl Debug for PngRawChunk<'_> {
   }
 }
 
-#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+/// An iterator that produces successive raw chunks from PNG bytes.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[repr(transparent)]
 pub struct PngRawChunkIter<'b>(&'b [u8]);
 impl<'b> PngRawChunkIter<'b> {
+  /// Pass the full PNG bytes, it will remove the PNG header automatically.
   pub const fn new(bytes: &'b [u8]) -> Self {
     match bytes {
       [_, _, _, _, _, _, _, _, rest @ ..] => Self(rest),
@@ -156,11 +178,16 @@ impl<'b> Iterator for PngRawChunkIter<'b> {
   }
 }
 
+/// A parsed PNG chunk
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum PngChunk<'b> {
+  /// Image Header
   IHDR(IHDR),
+  /// Palette
   PLTE(PLTE<'b>),
+  /// Image Data
   IDAT(IDAT<'b>),
+  /// Image End
   IEND,
 }
 impl<'b> TryFrom<PngRawChunk<'b>> for PngChunk<'b> {
@@ -181,16 +208,26 @@ impl<'b> TryFrom<PngRawChunk<'b>> for PngChunk<'b> {
   }
 }
 
+/// The types of color that PNG supports.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[repr(u8)]
 pub enum PngColorType {
+  /// Greyscale
   Y = 0,
+  /// Red, Green, Blue
   RGB = 2,
+  /// Index into a palette.
+  ///
+  /// The palette will have RGB8 data. There may optionally be a transparency
+  /// chunk.
   Index = 3,
+  /// Greyscale + Alpha
   YA = 4,
+  /// Red, Green, Blue, Alpha
   RGBA = 6,
 }
 impl PngColorType {
+  /// The number of channels in this type of color.
   pub const fn channel_count(self) -> usize {
     match self {
       Self::Y => 1,
@@ -215,12 +252,20 @@ impl TryFrom<u8> for PngColorType {
   }
 }
 
+/// Image Header
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct IHDR {
+  /// width in pixels
   pub width: u32,
+  /// height in pixels
   pub height: u32,
+  /// bits per channel
   pub bit_depth: u8,
+  /// pixel color type
   pub color_type: PngColorType,
+  /// if the image data is stored interlaced.
+  ///
+  /// please don't make new interlaced images, they're terrible.
   pub is_interlaced: bool,
 }
 impl IHDR {
@@ -318,6 +363,12 @@ impl TryFrom<&[u8]> for IHDR {
   }
 }
 
+/// Palette data
+///
+/// Palette entries are always RGB.
+///
+/// If you want to have a paletted image with transparency then the transparency
+/// info goes in a separate transparency chunk.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct PLTE<'b>(&'b [[u8; 3]]);
 impl<'b> From<&'b [[u8; 3]]> for PLTE<'b> {
@@ -343,11 +394,17 @@ impl Debug for PLTE<'_> {
   }
 }
 impl<'b> PLTE<'b> {
+  /// Gets the entries as a slice.
   pub fn entries(&self) -> &'b [[u8; 3]] {
     self.0
   }
 }
 
+/// Image Data.
+///
+/// * Image data is stored with Zlib compression applied.
+/// * Images can have more than one IDAT chunk. They should all be stored in a
+///   row. Multiple chunks are treated as a single Zlib datastream.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct IDAT<'b>(&'b [u8]);
 impl<'b> From<&'b [u8]> for IDAT<'b> {
@@ -924,5 +981,109 @@ impl IHDR {
 
     //
     Ok(())
+  }
+}
+
+#[cfg(all(feature = "alloc", feature = "miniz_oxide"))]
+impl crate::ImageRGBA8 {
+  /// Attempts to make an image from PNG bytes.
+  ///
+  /// ## Failure
+  /// Errors include, but are not limited to:
+  /// * Allocation failure.
+  /// * No [IHDR] found in the bytes.
+  ///
+  /// There's currently no error reporting, you just get `None`.
+  #[cfg_attr(docs_rs, doc(cfg(all(feature = "png", feature = "miniz_oxide"))))]
+  pub fn try_from_png_bytes(bytes: &[u8]) -> Option<Self> {
+    use alloc::vec::Vec;
+    //
+    let ihdr = match png_get_header(&bytes) {
+      Some(ihdr) => ihdr,
+      None => {
+        // No Image Header prevents all further processing.
+        return None;
+      }
+    };
+    let zlib_len = ihdr.get_zlib_decompression_requirement();
+    let mut zlib_buffer: Vec<u8> = Vec::new();
+    zlib_buffer.try_reserve(zlib_len).ok()?;
+    // ferris plz make this into a memset
+    zlib_buffer.resize(zlib_len, 0);
+    match miniz_oxide::inflate::decompress_slice_iter_to_slice(
+      &mut zlib_buffer,
+      png_get_idat(&bytes),
+      true,
+      true,
+    ) {
+      Ok(decompression_count) => {
+        if decompression_count < zlib_buffer.len() {
+          // potential a cause for concern, but i guess keep going. We already
+          // put enough zeros into the zlib buffer so we'll be able to unfilter
+          // either way.
+        }
+      }
+      Err(_e) => {
+        // should we cancel with an error? The most likely errors are that
+        // there's not actually Zlib compressed data (so we'd have an image of
+        // zeros) or there's too much Zlib compressed data (in which case we
+        // can maybe proceed with partial results).
+      }
+    }
+    let pixel_count = (ihdr.width * ihdr.height) as usize;
+    let mut pixels: Vec<RGBA8> = Vec::new();
+    pixels.try_reserve(pixel_count).ok()?;
+    // ferris plz make this into a memset
+    pixels.resize(pixel_count, [0_u8; 4]);
+    let mut image = crate::ImageRGBA8 { width: ihdr.width, height: ihdr.height, pixels };
+    let plte = if ihdr.color_type == PngColorType::Index {
+      png_get_palette(&bytes).unwrap_or(&[])
+    } else {
+      &[]
+    };
+    let unfilter_op = |x: u32, y: u32, data: &[u8]| {
+      if let Some(p) = image.get_mut(x, y) {
+        match ihdr.color_type {
+          PngColorType::RGB => {
+            let [r, g, b] = if ihdr.bit_depth == 16 {
+              [data[0], data[2], data[4]]
+            } else {
+              [data[0], data[1], data[2]]
+            };
+            *p = [r, g, b, 255];
+          }
+          PngColorType::RGBA => {
+            let [r, g, b, a] = if ihdr.bit_depth == 16 {
+              [data[0], data[2], data[4], data[6]]
+            } else {
+              [data[0], data[1], data[2], data[3]]
+            };
+            *p = [r, g, b, a];
+          }
+          PngColorType::YA => {
+            let [y, a] = if ihdr.bit_depth == 16 { [data[0], data[2]] } else { [data[0], data[1]] };
+            *p = [y, y, y, a];
+          }
+          PngColorType::Y => {
+            let y = if ihdr.bit_depth == 16 {
+              data[0]
+            } else {
+              u8_replicate_bits(ihdr.bit_depth as u32, data[0])
+            };
+            *p = [y, y, y, 255];
+          }
+          PngColorType::Index => {
+            let [r, g, b] = *plte.get(data[0] as usize).unwrap_or(&[0, 0, 0]);
+            *p = [r, g, b, 255];
+          }
+        }
+      } else {
+        // attempted out of bounds pixel write, but i guess it doesn't matter?
+      }
+    };
+    if let Err(_e) = ihdr.unfilter_decompressed_data(&mut zlib_buffer, unfilter_op) {
+      // err during unfiltering, do we care?
+    }
+    Some(image)
   }
 }
