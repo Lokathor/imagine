@@ -13,6 +13,7 @@ default = ["png"]
 png = [] # Portable Network Graphics
 #bmp = [] # Windows Bitmap
 #netpbm = [] # Covers all the Netpbm files: pbm, pgm, ppm, pnm, pam
+alloc = []
 
 [dependencies]
 bytemuck = "1.11"
