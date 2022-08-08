@@ -23,7 +23,7 @@
 //!
 //! ## Automatic Decoding
 //!
-//! Just call [ImageRGBA8::from_png_bytes](crate::ImageRGBA8::from_png_bytes)
+//! Just call [ImageRGBA8::try_from_png_bytes](crate::ImageRGBA8::try_from_png_bytes)
 //! and it'll do its best.
 //!
 //! This requires the `alloc` and `miniz_oxide` crate features.
