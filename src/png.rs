@@ -87,7 +87,6 @@
 //!   there because PNG comes from an era (1996) when disks and networks were a
 //!   lot less capable of preserving your data.
 
-use crate::RGBA8;
 use core::fmt::{Debug, Write};
 
 use bitfrob::u8_replicate_bits;
@@ -1031,7 +1030,7 @@ impl crate::ImageRGBA8 {
       }
     }
     let pixel_count = (ihdr.width * ihdr.height) as usize;
-    let mut pixels: Vec<RGBA8> = Vec::new();
+    let mut pixels: Vec<crate::RGBA8> = Vec::new();
     pixels.try_reserve(pixel_count).ok()?;
     // ferris plz make this into a memset
     pixels.resize(pixel_count, [0_u8; 4]);
