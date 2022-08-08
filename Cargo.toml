@@ -20,6 +20,8 @@ miniz_oxide = { version = "0.5.3", default-features = false, optional = true }
 [dev-dependencies]
 getrandom = "0.2.7"
 walkdir = "2.3.2"
+pixels = "0.9"
+winit = "0.26"
 
 [package.metadata.docs.rs]
 rustdoc-args = ["--cfg","docs_rs"]

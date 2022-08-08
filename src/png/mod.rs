@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 //! Module for working with PNG data.
 //!
 //! ## Library Design Assumptions
@@ -215,11 +217,11 @@ impl TryFrom<u8> for PngColorType {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct IHDR {
-  width: u32,
-  height: u32,
-  bit_depth: u8,
-  color_type: PngColorType,
-  is_interlaced: bool,
+  pub width: u32,
+  pub height: u32,
+  pub bit_depth: u8,
+  pub color_type: PngColorType,
+  pub is_interlaced: bool,
 }
 impl IHDR {
   /// You can call this if you must, but it complicates the apparent API to have
@@ -242,14 +244,15 @@ impl IHDR {
     ///   dimensions.
     #[inline]
     #[must_use]
-    const fn temp_bytes_for_image(
+    fn temp_bytes_for_image(
       width: u32, height: u32, color_type: PngColorType, bit_depth: u8,
     ) -> usize {
       if width == 0 {
         return 0;
       }
-      let bits_per_line: usize = color_type.channel_count().saturating_mul(bit_depth as usize);
-      let bytes_per_scanline: usize = bits_per_line.saturating_mul(8);
+      let bits_per_pixel: usize = color_type.channel_count().saturating_mul(bit_depth as usize);
+      let bits_per_line: usize = bits_per_pixel.saturating_mul(width as usize);
+      let bytes_per_scanline: usize = (bits_per_line / 8) + (bits_per_line % 8 != 0) as usize;
       let bytes_per_filterline: usize = bytes_per_scanline.saturating_add(1);
       bytes_per_filterline.saturating_mul(height as usize)
     }
