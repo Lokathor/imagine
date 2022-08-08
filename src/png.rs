@@ -91,7 +91,7 @@ use core::fmt::{Debug, Write};
 
 use bitfrob::u8_replicate_bits;
 
-// TODO: CRC support for raw chunks is needed
+// TODO: CRC support for raw chunks is needed later to write PNG data.
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[repr(transparent)]
