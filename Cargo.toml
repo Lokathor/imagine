@@ -9,11 +9,11 @@ license = "Zlib OR Apache-2.0 OR MIT"
 autoexamples = false
 
 [features]
-default = ["png"]
+default = ["alloc", "png"]
+alloc = []
 png = [] # Portable Network Graphics
 #bmp = [] # Windows Bitmap
 #netpbm = [] # Covers all the Netpbm files: pbm, pgm, ppm, pnm, pam
-alloc = []
 
 [dependencies]
 bytemuck = "1.11"
@@ -28,9 +28,7 @@ winit = "0.26"
 
 [package.metadata.docs.rs]
 rustdoc-args = ["--cfg","docs_rs"]
-features = [
-  "alloc",
-]
+all-features = true
 
 [[example]]
 name = "png_chunk_print"
@@ -38,4 +36,4 @@ required-features = ["png"]
 
 [[example]]
 name = "png_viewer"
-required-features = ["png", "miniz_oxide"]
+required-features = ["alloc", "png", "miniz_oxide"]
