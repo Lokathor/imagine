@@ -1,43 +1,39 @@
 [package]
 name = "imagine"
-version = "0.0.8"
-authors = ["Lokathor <zefria@gmail.com>"]
+description = "A crate to help with images."
+repository = "https://github.com/Lokathor/imagine"
+version = "0.1.0"
 edition = "2021"
 license = "Zlib OR Apache-2.0 OR MIT"
-repository = "https://github.com/Lokathor/imagine"
-description = "A crate to help with images."
+
+autoexamples = false
 
 [features]
-default = []
+default = ["alloc", "png"]
 alloc = []
-all-formats = ["png", "bmp", "netpbm"]
-
-# Portable Network Graphics
-png = ["miniz_oxide"]
-
-# Windows Bitmap
-bmp = []
-
-# Covers all the Netpbm files: pbm, pgm, ppm, pnm, pam
-netpbm = []
+png = [] # Portable Network Graphics
+#bmp = [] # Windows Bitmap
+#netpbm = [] # Covers all the Netpbm files: pbm, pgm, ppm, pnm, pam
 
 [dependencies]
-bytemuck = "1"
-miniz_oxide = { version = "0.5", default-features = false, optional = true }
-wide = "0.7"
+bytemuck = "1.11"
+bitfrob = "0.2.1"
+miniz_oxide = { version = "0.5.3", default-features = false, optional = true }
 
 [dev-dependencies]
-#pixels = "0.8"
-pixels = { git = "https://github.com/parasyte/pixels", rev = "4c6682e65bb417cdaa6e9964cbace5369149452d" }
-winit = "0.25"
-
-[[example]]
-name = "demo"
-required-features = ["alloc"]
+getrandom = "0.2.7"
+walkdir = "2.3.2"
+pixels = "0.9"
+winit = "0.26"
 
 [package.metadata.docs.rs]
 rustdoc-args = ["--cfg","docs_rs"]
-features = [
-  "alloc",
-  "all-formats",
-]
+all-features = true
+
+[[example]]
+name = "png_chunk_print"
+required-features = ["png"]
+
+[[example]]
+name = "png_viewer"
+required-features = ["alloc", "png", "miniz_oxide"]
