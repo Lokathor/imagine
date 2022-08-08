@@ -6,9 +6,11 @@ version = "0.1.0"
 edition = "2021"
 license = "Zlib OR Apache-2.0 OR MIT"
 
+autoexamples = false
+
 [features]
 default = ["png"]
-png = ["miniz_oxide"] # Portable Network Graphics
+png = [] # Portable Network Graphics
 #bmp = [] # Windows Bitmap
 #netpbm = [] # Covers all the Netpbm files: pbm, pgm, ppm, pnm, pam
 
@@ -28,3 +30,11 @@ rustdoc-args = ["--cfg","docs_rs"]
 features = [
   "alloc",
 ]
+
+[[example]]
+name = "png_chunk_print"
+required-features = ["png"]
+
+[[example]]
+name = "png_viewer"
+required-features = ["png", "miniz_oxide"]
