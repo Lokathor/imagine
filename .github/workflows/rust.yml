@@ -24,4 +24,8 @@ jobs:
       with:
         rust-version: ${{ matrix.rust }}
     - uses: actions/checkout@v2
-    - run: cargo test --verbose
+    - run: cargo check --no-default-features
+    - run: cargo check --no-default-features --features="png"
+    - run: cargo check --no-default-features --features="png,miniz_oxide"
+    - run: cargo check --no-default-features --features="png,miniz_oxide,alloc"
+    - run: cargo test --all-features
