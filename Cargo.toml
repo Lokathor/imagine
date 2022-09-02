@@ -19,7 +19,7 @@ png = [] # Portable Network Graphics
 
 [dependencies]
 bytemuck = { version = "1.11", features = ["derive"] }
-bitfrob = "0.2.1"
+bitfrob = "0.2.3"
 miniz_oxide = { version = "0.5.3", default-features = false, optional = true }
 
 [dev-dependencies]
