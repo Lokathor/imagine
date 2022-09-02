@@ -838,7 +838,7 @@ impl IHDR {
         16 => 6,
         _ => return Err(()),
       },
-      PngColorType::Index => match self.bitdepth{
+      PngColorType::Index => match self.bit_depth{
         8|4|2|1=> 1,
         _=> return Err(()),
       },
