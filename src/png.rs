@@ -398,7 +398,13 @@ impl Debug for tRNS<'_> {
   }
 }
 impl<'b> tRNS<'b> {
-  // TODO
+  #[inline]
+  pub const fn try_to_grayscale(&self) -> Option<u16> {
+    match self.0 {
+      [y0, y1] => Some(u16::from_be_bytes([*y0, *y1])),
+      _ => None,
+    }
+  }
 }
 
 /// Palette data
