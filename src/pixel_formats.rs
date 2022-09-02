@@ -100,3 +100,16 @@ impl From<RGBA8888> for XBGR8888 {
     Self { r, g, b, x: a }
   }
 }
+
+/// Red/Green/Blue, u8 per channel.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[repr(C)]
+#[allow(missing_docs)]
+#[cfg(target_endian = "little")]
+pub struct RGB888 {
+  pub r: u8,
+  pub g: u8,
+  pub b: u8,
+}
+unsafe impl Zeroable for RGB888 {}
+unsafe impl Pod for RGB888 {}

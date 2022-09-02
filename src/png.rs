@@ -91,7 +91,7 @@ use core::fmt::{Debug, Write};
 
 use bitfrob::u8_replicate_bits;
 
-use crate::pixel_formats::RGBA8888;
+use crate::pixel_formats::{RGBA8888, RGB888};
 
 // TODO: CRC support for raw chunks is needed later to write PNG data.
 
@@ -198,7 +198,7 @@ impl<'b> TryFrom<PngRawChunk<'b>> for PngChunk<'b> {
       PngRawChunkType::IHDR => {
         return IHDR::try_from(raw.data).map(PngChunk::IHDR).map_err(|_| raw);
       }
-      PngRawChunkType::PLTE => match bytemuck::try_cast_slice::<u8, [u8; 3]>(raw.data) {
+      PngRawChunkType::PLTE => match bytemuck::try_cast_slice::<u8, RGB888>(raw.data) {
         Ok(entries) => PngChunk::PLTE(PLTE::from(entries)),
         Err(_) => return Err(raw),
       },
@@ -371,11 +371,11 @@ impl TryFrom<&[u8]> for IHDR {
 /// If you want to have a paletted image with transparency then the transparency
 /// info goes in a separate transparency chunk.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct PLTE<'b>(&'b [[u8; 3]]);
-impl<'b> From<&'b [[u8; 3]]> for PLTE<'b> {
+pub struct PLTE<'b>(&'b [RGB888]);
+impl<'b> From<&'b [RGB888]> for PLTE<'b> {
   #[inline]
   #[must_use]
-  fn from(entries: &'b [[u8; 3]]) -> Self {
+  fn from(entries: &'b [RGB888]) -> Self {
     Self(entries)
   }
 }
@@ -391,12 +391,13 @@ impl<'b> TryFrom<PngChunk<'b>> for PLTE<'b> {
 }
 impl Debug for PLTE<'_> {
   fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+    // currently prints no more than 4 palette entries
     f.debug_tuple("PLTE").field(&&self.0[..self.0.len().min(4)]).field(&self.0.len()).finish()
   }
 }
 impl<'b> PLTE<'b> {
   /// Gets the entries as a slice.
-  pub fn entries(&self) -> &'b [[u8; 3]] {
+  pub fn entries(&self) -> &'b [RGB888] {
     self.0
   }
 }
@@ -458,7 +459,7 @@ pub fn png_get_header(bytes: &[u8]) -> Option<IHDR> {
 /// Gets the palette out of the PNG bytes.
 ///
 /// Each `[u8;3]` in the palette is an `[r8, g8, b8]` color entry.
-pub fn png_get_palette(bytes: &[u8]) -> Option<&[[u8; 3]]> {
+pub fn png_get_palette(bytes: &[u8]) -> Option<&[RGB888]> {
   PngRawChunkIter::new(bytes)
     .filter_map(|raw_chunk| {
       let png_chunk = PngChunk::try_from(raw_chunk).ok()?;
@@ -1039,7 +1040,7 @@ where
     // ferris plz make this into a memset
     pixels.resize(pixel_count, RGBA8888::default().into());
     let mut image = Self { width: ihdr.width, height: ihdr.height, pixels };
-    let plte = if ihdr.color_type == PngColorType::Index {
+    let plte: &[RGB888] = if ihdr.color_type == PngColorType::Index {
       png_get_palette(bytes).unwrap_or(&[])
     } else {
       &[]
@@ -1076,8 +1077,8 @@ where
             *p = RGBA8888 { r: y, g: y, b: y, a: 255 }.into();
           }
           PngColorType::Index => {
-            let [r, g, b] = *plte.get(data[0] as usize).unwrap_or(&[0, 0, 0]);
-            *p = RGBA8888 { r, g, b, a: 255 }.into();
+            let RGB888{r,g,b} = *plte.get(data[0] as usize).unwrap_or(&RGB888::default());
+            *p = RGBA8888{r,g,b,a:255}.into()
           }
         }
       } else {
