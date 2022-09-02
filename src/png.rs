@@ -182,6 +182,7 @@ impl<'b> Iterator for PngRawChunkIter<'b> {
 
 /// A parsed PNG chunk
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[allow(nonstandard_style)]
 pub enum PngChunk<'b> {
   /// Image Header
   IHDR(IHDR),
@@ -206,6 +207,7 @@ impl<'b> TryFrom<PngRawChunk<'b>> for PngChunk<'b> {
         Ok(entries) => PngChunk::PLTE(PLTE::from(entries)),
         Err(_) => return Err(raw),
       },
+      PngRawChunkType::tRNS => PngChunk::tRNS(tRNS::from(raw.data)),
       PngRawChunkType::IDAT => PngChunk::IDAT(IDAT::from(raw.data)),
       PngRawChunkType::IEND => PngChunk::IEND,
       _ => return Err(raw),
@@ -370,6 +372,7 @@ impl TryFrom<&[u8]> for IHDR {
 
 /// Transparency data
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[allow(nonstandard_style)]
 pub struct tRNS<'b>(&'b [u8]);
 impl<'b> From<&'b [u8]> for tRNS<'b> {
   #[inline]
