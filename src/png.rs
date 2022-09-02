@@ -98,11 +98,13 @@ use crate::pixel_formats::{RGBA8888, RGB888};
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[repr(transparent)]
 struct PngRawChunkType([u8; 4]);
+#[allow(nonstandard_style)]
 impl PngRawChunkType {
   pub const IHDR: Self = Self(*b"IHDR");
   pub const PLTE: Self = Self(*b"PLTE");
   pub const IDAT: Self = Self(*b"IDAT");
   pub const IEND: Self = Self(*b"IEND");
+  pub const tRNS: Self = Self(*b"tRNS");
 }
 impl Debug for PngRawChunkType {
   fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
@@ -181,11 +183,14 @@ impl<'b> Iterator for PngRawChunkIter<'b> {
 
 /// A parsed PNG chunk
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[allow(nonstandard_style)]
 pub enum PngChunk<'b> {
   /// Image Header
   IHDR(IHDR),
   /// Palette
   PLTE(PLTE<'b>),
+  /// Transparency
+  tRNS(tRNS<'b>),
   /// Image Data
   IDAT(IDAT<'b>),
   /// Image End
@@ -196,12 +201,14 @@ impl<'b> TryFrom<PngRawChunk<'b>> for PngChunk<'b> {
   fn try_from(raw: PngRawChunk<'b>) -> Result<Self, Self::Error> {
     Ok(match raw.type_ {
       PngRawChunkType::IHDR => {
+        // this can fail, so use `return` to avoid the outer Ok()
         return IHDR::try_from(raw.data).map(PngChunk::IHDR).map_err(|_| raw);
       }
       PngRawChunkType::PLTE => match bytemuck::try_cast_slice::<u8, RGB888>(raw.data) {
         Ok(entries) => PngChunk::PLTE(PLTE::from(entries)),
         Err(_) => return Err(raw),
       },
+      PngRawChunkType::tRNS => PngChunk::tRNS(tRNS::from(raw.data)),
       PngRawChunkType::IDAT => PngChunk::IDAT(IDAT::from(raw.data)),
       PngRawChunkType::IEND => PngChunk::IEND,
       _ => return Err(raw),
@@ -364,6 +371,63 @@ impl TryFrom<&[u8]> for IHDR {
   }
 }
 
+/// Transparency data
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[allow(nonstandard_style)]
+pub struct tRNS<'b>(&'b [u8]);
+impl<'b> From<&'b [u8]> for tRNS<'b> {
+  #[inline]
+  #[must_use]
+  fn from(data: &'b [u8]) -> Self {
+    Self(data)
+  }
+}
+impl<'b> TryFrom<PngChunk<'b>> for tRNS<'b> {
+  type Error = ();
+  #[inline]
+  fn try_from(value: PngChunk<'b>) -> Result<Self, Self::Error> {
+    match value {
+      PngChunk::tRNS(trns) => Ok(trns),
+      _ => Err(()),
+    }
+  }
+}
+impl Debug for tRNS<'_> {
+  fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+    f.debug_tuple("tRNS").field(&&self.0[..]).field(&self.0.len()).finish()
+  }
+}
+impl<'b> tRNS<'b> {
+  /// Gets the grayscale value that is transparent.
+  ///
+  /// Fails when the chunk has the wrong length for grayscale.
+  #[inline]
+  pub const fn try_to_grayscale(&self) -> Option<u16> {
+    match self.0 {
+      [y0, y1] => Some(u16::from_be_bytes([*y0, *y1])),
+      _ => None,
+    }
+  }
+  /// Gets the RGB value that is transparent.
+  ///
+  /// Fails when the chunk has the wrong length for rgb.
+  #[inline]
+  pub const fn try_to_rgb(&self) -> Option<[u16; 3]> {
+    match self.0 {
+      [r0, r1, g0, g1, b0, b1] => Some([
+        u16::from_be_bytes([*r0, *r1]),
+        u16::from_be_bytes([*g0, *g1]),
+        u16::from_be_bytes([*b0, *b1]),
+      ]),
+      _ => None,
+    }
+  }
+  /// Gets the alpha values for each palette index.
+  pub const fn to_alphas(&self) -> &'b [u8] {
+    self.0
+  }
+}
+
 /// Palette data
 ///
 /// Palette entries are always RGB.
@@ -454,6 +518,15 @@ pub fn png_get_header(bytes: &[u8]) -> Option<IHDR> {
       IHDR::try_from(png_chunk).ok()
     })
     .next()
+}
+
+/// Gets the transparency chunk for the PNG bytes, if any.
+pub fn png_get_transparency(bytes: &[u8]) -> Option<tRNS<'_>> {
+  PngRawChunkIter::new(bytes).filter_map(|raw_chunk| {
+    let png_chunk = PngChunk::try_from(raw_chunk).ok()?;
+    let trns = tRNS::try_from(png_chunk).ok()?;
+    Some(trns)
+  }).next()
 }
 
 /// Gets the palette out of the PNG bytes.
@@ -755,13 +828,20 @@ impl IHDR {
     // filtering is per byte within a pixel when pixels are more than 1 byte
     // each, and per byte when pixels are 1 byte or less.
     let filter_chunk_size = match self.color_type {
-      PngColorType::Y => 1,
+      PngColorType::Y => match self.bit_depth {
+        16 => 2,
+        8|4|2|1=>1,
+        _=> return Err(()),
+      }
       PngColorType::RGB => match self.bit_depth {
         8 => 3,
         16 => 6,
         _ => return Err(()),
       },
-      PngColorType::Index => 1,
+      PngColorType::Index => match self.bit_depth{
+        8|4|2|1=> 1,
+        _=> return Err(()),
+      },
       PngColorType::YA => match self.bit_depth {
         8 => 2,
         16 => 4,
@@ -1045,6 +1125,17 @@ where
     } else {
       &[]
     };
+    let (trns_y, trns_rgb, trns_alphas): (Option<u16>, Option<[u16;3]>, Option<&[u8]>) = {
+      if let Some(trns) = png_get_transparency(bytes) {
+        (
+          trns.try_to_grayscale(),
+          trns.try_to_rgb(),
+          Some(trns.to_alphas()),
+        )
+      } else {
+        (None, None, None)
+      }
+    };
     let unfilter_op = |x: u32, y: u32, data: &[u8]| {
       if let Some(p) = image.get_mut(x, y) {
         match ihdr.color_type {
@@ -1054,7 +1145,19 @@ where
             } else {
               [data[0], data[1], data[2]]
             };
-            *p = RGBA8888 { r, g, b, a: 255 }.into();
+            let full = if ihdr.bit_depth == 16{ Some([
+              u16::from_be_bytes([data[0], data[1]]),
+              u16::from_be_bytes([data[2], data[3]]),
+              u16::from_be_bytes([data[4], data[5]]),
+            ])} else {
+              Some([data[0] as u16, data[1] as u16, data[2] as u16])
+            };
+            let a = if trns_rgb == full {
+              0
+            } else {
+              255
+            };
+            *p = RGBA8888 { r, g, b, a }.into();
           }
           PngColorType::RGBA => {
             let [r, g, b, a] = if ihdr.bit_depth == 16 {
@@ -1074,11 +1177,24 @@ where
             } else {
               u8_replicate_bits(ihdr.bit_depth as u32, data[0])
             };
-            *p = RGBA8888 { r: y, g: y, b: y, a: 255 }.into();
+            let full = if ihdr.bit_depth == 16 {Some(
+              u16::from_be_bytes([data[0], data[1]]),
+            )} else { Some(data[0] as u16) };
+            let a = if trns_y == full {
+              0
+            } else {
+              255
+            };
+            *p = RGBA8888 { r: y, g: y, b: y, a }.into();
           }
           PngColorType::Index => {
             let RGB888{r,g,b} = *plte.get(data[0] as usize).unwrap_or(&RGB888::default());
-            *p = RGBA8888{r,g,b,a:255}.into()
+            let a = if let Some(alphas) = trns_alphas {
+              *alphas.get(data[0] as usize).unwrap_or(&255)
+            } else {
+              255
+            };
+            *p = RGBA8888{r,g,b,a}.into()
           }
         }
       } else {
