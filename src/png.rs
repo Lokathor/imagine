@@ -1138,11 +1138,13 @@ where
             } else {
               [data[0], data[1], data[2]]
             };
-            let full = Some([
+            let full = if ihdr.bit_depth{ Some([
               u16::from_be_bytes([data[0], data[1]]),
               u16::from_be_bytes([data[2], data[3]]),
               u16::from_be_bytes([data[4], data[5]]),
-            ]);
+            ])} else {
+              Some([data[0], data[1], data[2]])
+            };
             let a = if trns_rgb == full {
               0
             } else {
@@ -1168,9 +1170,9 @@ where
             } else {
               u8_replicate_bits(ihdr.bit_depth as u32, data[0])
             };
-            let full = Some(
+            let full = if ihdr.bit_depth == 16 {Some(
               u16::from_be_bytes([data[0], data[1]]),
-            );
+            )} else { Some(data[0]) };
             let a = if trns_y == full {
               0
             } else {
