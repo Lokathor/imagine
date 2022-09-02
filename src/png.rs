@@ -1077,7 +1077,8 @@ where
             *p = RGBA8888 { r: y, g: y, b: y, a: 255 }.into();
           }
           PngColorType::Index => {
-            *p = (*plte.get(data[0] as usize).unwrap_or(&RGB888::default())).into()
+            let RGB888{r,g,b} = *plte.get(data[0] as usize).unwrap_or(&RGB888::default());
+            *p = RGBA8888{r,g,b,a:255}.into()
           }
         }
       } else {
