@@ -7,8 +7,6 @@ use core::ops::{Index, IndexMut};
 
 use alloc::vec::Vec;
 
-use crate::RGBA8;
-
 /// A basic containers for [RGBA8] data.
 ///
 /// * The `pixels` vec should hold `width * height` pixels, row by row. If you
@@ -19,15 +17,15 @@ use crate::RGBA8;
 ///   the image, because different image formats and GPU libraries disagree.
 #[derive(Debug, Clone, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[cfg_attr(docs_rs, doc(cfg(feature = "alloc")))]
-pub struct ImageRGBA8 {
+pub struct Image<P> {
   /// Image width (in pixels).
   pub width: u32,
   /// Image height (in pixels).
   pub height: u32,
   /// Image pixel data.
-  pub pixels: Vec<RGBA8>,
+  pub pixels: Vec<P>,
 }
-impl ImageRGBA8 {
+impl<P> Image<P> {
   /// Converts and `x` and `y` to an index into the `pixels` vec.
   ///
   /// ```txt
@@ -51,7 +49,7 @@ impl ImageRGBA8 {
   /// * If `x` or `y` are out of bounds you get `None`.
   #[inline]
   #[must_use]
-  pub fn get(&self, x: u32, y: u32) -> Option<&RGBA8> {
+  pub fn get(&self, x: u32, y: u32) -> Option<&P> {
     if x >= self.width {
       return None;
     }
@@ -66,7 +64,7 @@ impl ImageRGBA8 {
   /// * If `x` or `y` are out of bounds you get `None`.
   #[inline]
   #[must_use]
-  pub fn get_mut(&mut self, x: u32, y: u32) -> Option<&mut RGBA8> {
+  pub fn get_mut(&mut self, x: u32, y: u32) -> Option<&mut P> {
     if x >= self.width {
       return None;
     }
@@ -77,8 +75,8 @@ impl ImageRGBA8 {
     self.pixels.get_mut(i)
   }
 }
-impl Index<(u32, u32)> for ImageRGBA8 {
-  type Output = RGBA8;
+impl<P> Index<(u32, u32)> for Image<P> {
+  type Output = P;
   #[inline]
   #[must_use]
   #[track_caller]
@@ -88,7 +86,7 @@ impl Index<(u32, u32)> for ImageRGBA8 {
     &self.pixels[self.xy_to_index(x, y)]
   }
 }
-impl IndexMut<(u32, u32)> for ImageRGBA8 {
+impl<P> IndexMut<(u32, u32)> for Image<P> {
   #[inline]
   #[must_use]
   #[track_caller]

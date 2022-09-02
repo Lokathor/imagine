@@ -1,4 +1,4 @@
-use imagine::ImageRGBA8;
+use imagine::{pixels::RGBA8888, Image};
 use pixels::{Pixels, SurfaceTexture};
 use winit::{
   dpi::LogicalSize,
@@ -29,7 +29,7 @@ fn main() {
   };
 
   // THIS IS THE COOL PART WHERE WE'RE USING THE LIBRARY TO PARSE A PNG
-  let image = match ImageRGBA8::try_from_png_bytes(&bytes) {
+  let image = match Image::<RGBA8888>::try_from_png_bytes(&bytes) {
     Some(image) => image,
     None => {
       println!("Couldn't parse the file as a PNG.");
@@ -65,12 +65,10 @@ fn main() {
         if let Err(e) = pixels.render() {
           println!("Error during rendering: {e:?}");
           *control_flow = ControlFlow::Exit;
-          return;
         }
       }
       Event::WindowEvent { event: WindowEvent::CloseRequested, .. } => {
         *control_flow = ControlFlow::Exit;
-        return;
       }
       _ => (),
     }

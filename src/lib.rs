@@ -18,5 +18,4 @@ pub use basic_image::*;
 #[cfg_attr(docs_rs, doc(cfg(feature = "png")))]
 pub mod png;
 
-/// Four channel color, RGBA, 8 bits per channel.
-pub type RGBA8 = [u8; 4];
+pub mod pixels;

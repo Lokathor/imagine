@@ -91,6 +91,8 @@ use core::fmt::{Debug, Write};
 
 use bitfrob::u8_replicate_bits;
 
+use crate::{pixels::RGBA8888, Image};
+
 // TODO: CRC support for raw chunks is needed later to write PNG data.
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -440,10 +442,7 @@ impl<'b> IDAT<'b> {
 /// * If this is *not* the case, the rest of the bytes are very likely *not* PNG
 ///   data.
 pub const fn is_png_header_correct(bytes: &[u8]) -> bool {
-  match bytes {
-    [137, 80, 78, 71, 13, 10, 26, 10, ..] => true,
-    _ => false,
-  }
+  matches!(bytes, [137, 80, 78, 71, 13, 10, 26, 10, ..])
 }
 
 /// Gets the [IHDR] out of the PNG bytes.
@@ -633,6 +632,7 @@ const fn interlaced_pos_to_full_pos(
   // 5 6 5 6 5 6 5 6
   // 7 7 7 7 7 7 7 7
   // ```
+  #[allow(clippy::identity_op)]
   match image_level {
     0 /* full image */ => (reduced_x, reduced_y),
     1 => (reduced_x * 8 + 0, reduced_y * 8 + 0),
@@ -718,6 +718,7 @@ impl IHDR {
   /// destination.
   ///
   /// See the [`png` module docs](crate::png) for guidance.
+  #[allow(clippy::result_unit_err)]
   pub fn unfilter_decompressed_data<F>(
     &self, mut decompressed: &mut [u8], mut op: F,
   ) -> Result<(), ()>
@@ -827,7 +828,7 @@ impl IHDR {
             let (reduced_x, pixel): (u32, &mut [u8]) = p_it.next().unwrap();
             self.send_out_pixel(image_level, reduced_x, reduced_y, pixel, &mut op);
             let mut a_pixel = pixel;
-            while let Some((reduced_x, pixel)) = p_it.next() {
+            for (reduced_x, pixel) in p_it {
               a_pixel
                 .iter()
                 .copied()
@@ -843,7 +844,7 @@ impl IHDR {
             let (reduced_x, pixel): (u32, &mut [u8]) = p_it.next().unwrap();
             self.send_out_pixel(image_level, reduced_x, reduced_y, pixel, &mut op);
             let mut a_pixel = pixel;
-            while let Some((reduced_x, pixel)) = p_it.next() {
+            for (reduced_x, pixel) in p_it {
               // the `b` is always 0, so we elide it from the computation
               a_pixel
                 .iter()
@@ -860,7 +861,7 @@ impl IHDR {
             let (reduced_x, pixel): (u32, &mut [u8]) = p_it.next().unwrap();
             self.send_out_pixel(image_level, reduced_x, reduced_y, pixel, &mut op);
             let mut a_pixel = pixel;
-            while let Some((reduced_x, pixel)) = p_it.next() {
+            for (reduced_x, pixel) in p_it {
               // the `b` and `c` are both always 0
               a_pixel
                 .iter()
@@ -897,7 +898,7 @@ impl IHDR {
             let (reduced_x, pixel): (u32, &mut [u8]) = p_it.next().unwrap();
             self.send_out_pixel(image_level, reduced_x, reduced_y, pixel, &mut op);
             let mut a_pixel = pixel;
-            while let Some((reduced_x, pixel)) = p_it.next() {
+            for (reduced_x, pixel) in p_it {
               a_pixel
                 .iter()
                 .copied()
@@ -930,7 +931,7 @@ impl IHDR {
               .for_each(|(p, b)| *p = p.wrapping_add(b / 2));
             self.send_out_pixel(image_level, reduced_x, reduced_y, pixel, &mut op);
             let mut a_pixel: &[u8] = pixel;
-            while let Some((reduced_x, pixel, b_pixel)) = pb_it.next() {
+            for (reduced_x, pixel, b_pixel) in pb_it {
               a_pixel.iter().copied().zip(b_pixel.iter().copied()).zip(pixel.iter_mut()).for_each(
                 |((a, b), p)| {
                   *p = p.wrapping_add(((a as u32 + b as u32) / 2) as u8);
@@ -951,7 +952,7 @@ impl IHDR {
             self.send_out_pixel(image_level, reduced_x, reduced_y, pixel, &mut op);
             let mut a_pixel = pixel;
             let mut c_pixel = b_pixel;
-            while let Some((reduced_x, pixel, b_pixel)) = pb_it.next() {
+            for (reduced_x, pixel, b_pixel) in pb_it {
               a_pixel
                 .iter()
                 .copied()
@@ -984,7 +985,10 @@ impl IHDR {
 }
 
 #[cfg(all(feature = "alloc", feature = "miniz_oxide"))]
-impl crate::ImageRGBA8 {
+impl<P> Image<P>
+where
+  P: From<RGBA8888> + Clone,
+{
   /// Attempts to make an image from PNG bytes.
   ///
   /// ## Failure
@@ -997,7 +1001,7 @@ impl crate::ImageRGBA8 {
   pub fn try_from_png_bytes(bytes: &[u8]) -> Option<Self> {
     use alloc::vec::Vec;
     //
-    let ihdr = match png_get_header(&bytes) {
+    let ihdr = match png_get_header(bytes) {
       Some(ihdr) => ihdr,
       None => {
         // No Image Header prevents all further processing.
@@ -1011,7 +1015,7 @@ impl crate::ImageRGBA8 {
     zlib_buffer.resize(zlib_len, 0);
     match miniz_oxide::inflate::decompress_slice_iter_to_slice(
       &mut zlib_buffer,
-      png_get_idat(&bytes),
+      png_get_idat(bytes),
       true,
       true,
     ) {
@@ -1030,13 +1034,13 @@ impl crate::ImageRGBA8 {
       }
     }
     let pixel_count = (ihdr.width * ihdr.height) as usize;
-    let mut pixels: Vec<crate::RGBA8> = Vec::new();
+    let mut pixels: Vec<P> = Vec::new();
     pixels.try_reserve(pixel_count).ok()?;
     // ferris plz make this into a memset
-    pixels.resize(pixel_count, [0_u8; 4]);
-    let mut image = crate::ImageRGBA8 { width: ihdr.width, height: ihdr.height, pixels };
+    pixels.resize(pixel_count, RGBA8888::default().into());
+    let mut image = Self { width: ihdr.width, height: ihdr.height, pixels };
     let plte = if ihdr.color_type == PngColorType::Index {
-      png_get_palette(&bytes).unwrap_or(&[])
+      png_get_palette(bytes).unwrap_or(&[])
     } else {
       &[]
     };
@@ -1049,7 +1053,7 @@ impl crate::ImageRGBA8 {
             } else {
               [data[0], data[1], data[2]]
             };
-            *p = [r, g, b, 255];
+            *p = RGBA8888 { r, g, b, a: 255 }.into();
           }
           PngColorType::RGBA => {
             let [r, g, b, a] = if ihdr.bit_depth == 16 {
@@ -1057,11 +1061,11 @@ impl crate::ImageRGBA8 {
             } else {
               [data[0], data[1], data[2], data[3]]
             };
-            *p = [r, g, b, a];
+            *p = RGBA8888 { r, g, b, a }.into();
           }
           PngColorType::YA => {
             let [y, a] = if ihdr.bit_depth == 16 { [data[0], data[2]] } else { [data[0], data[1]] };
-            *p = [y, y, y, a];
+            *p = RGBA8888 { r: y, g: y, b: y, a }.into();
           }
           PngColorType::Y => {
             let y = if ihdr.bit_depth == 16 {
@@ -1069,11 +1073,11 @@ impl crate::ImageRGBA8 {
             } else {
               u8_replicate_bits(ihdr.bit_depth as u32, data[0])
             };
-            *p = [y, y, y, 255];
+            *p = RGBA8888 { r: y, g: y, b: y, a: 255 }.into();
           }
           PngColorType::Index => {
             let [r, g, b] = *plte.get(data[0] as usize).unwrap_or(&[0, 0, 0]);
-            *p = [r, g, b, 255];
+            *p = RGBA8888 { r, g, b, a: 255 }.into();
           }
         }
       } else {

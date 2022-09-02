@@ -2,7 +2,7 @@
 name = "imagine"
 description = "A crate to help with images."
 repository = "https://github.com/Lokathor/imagine"
-version = "0.1.1"
+version = "0.2.0"
 edition = "2021"
 license = "Zlib OR Apache-2.0 OR MIT"
 categories = ["encoding", "no-std"]
@@ -11,13 +11,14 @@ autoexamples = false
 
 [features]
 default = ["alloc", "png"]
+align_pixels = [] # Causes 4-byte pixel structs to be align=4 (normaly they're align=1)
 alloc = []
 png = [] # Portable Network Graphics
 #bmp = [] # Windows Bitmap
 #netpbm = [] # Covers all the Netpbm files: pbm, pgm, ppm, pnm, pam
 
 [dependencies]
-bytemuck = "1.11"
+bytemuck = { version = "1.11", features = ["derive"] }
 bitfrob = "0.2.1"
 miniz_oxide = { version = "0.5.3", default-features = false, optional = true }
 
