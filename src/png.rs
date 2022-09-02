@@ -828,13 +828,20 @@ impl IHDR {
     // filtering is per byte within a pixel when pixels are more than 1 byte
     // each, and per byte when pixels are 1 byte or less.
     let filter_chunk_size = match self.color_type {
-      PngColorType::Y => 1,
+      PngColorType::Y => match self.bit_depth {
+        16 => 2,
+        8|4|2|1=>1,
+        _=> return Err(()),
+      }
       PngColorType::RGB => match self.bit_depth {
         8 => 3,
         16 => 6,
         _ => return Err(()),
       },
-      PngColorType::Index => 1,
+      PngColorType::Index => match self.bitdepth{
+        8|4|2|1=> 1,
+        _=> return Err(()),
+      },
       PngColorType::YA => match self.bit_depth {
         8 => 2,
         16 => 4,
