@@ -1138,7 +1138,17 @@ where
             } else {
               [data[0], data[1], data[2]]
             };
-            *p = RGBA8888 { r, g, b, a: 255 }.into();
+            let full = Some([
+              u16::from_be_bytes([data[0], data[1]]),
+              u16::from_be_bytes([data[2], data[3]]),
+              u16::from_be_bytes([data[4], data[5]]),
+            ]);
+            let a = if trns_rgb == full {
+              0
+            } else {
+              255
+            };
+            *p = RGBA8888 { r, g, b, a }.into();
           }
           PngColorType::RGBA => {
             let [r, g, b, a] = if ihdr.bit_depth == 16 {
@@ -1158,11 +1168,24 @@ where
             } else {
               u8_replicate_bits(ihdr.bit_depth as u32, data[0])
             };
-            *p = RGBA8888 { r: y, g: y, b: y, a: 255 }.into();
+            let full = Some(
+              u16::from_be_bytes([data[0], data[1]]),
+            );
+            let a = if trns_y == full {
+              0
+            } else {
+              255
+            };
+            *p = RGBA8888 { r: y, g: y, b: y, a }.into();
           }
           PngColorType::Index => {
             let RGB888{r,g,b} = *plte.get(data[0] as usize).unwrap_or(&RGB888::default());
-            *p = RGBA8888{r,g,b,a:255}.into()
+            let a = if let Some(alphas) = trns_alphas {
+              *alphas.get(data[0] as usize).unwrap_or(&255)
+            } else {
+              255
+            };
+            *p = RGBA8888{r,g,b,a}.into()
           }
         }
       } else {
