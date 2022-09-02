@@ -1,5 +1,4 @@
 #![no_std]
-#![forbid(unsafe_code)]
 #![cfg_attr(docs_rs, feature(doc_cfg))]
 #![allow(unused_imports)]
 #![warn(missing_docs)]
@@ -11,9 +10,7 @@
 extern crate alloc;
 
 #[cfg(feature = "alloc")]
-mod basic_image;
-#[cfg(feature = "alloc")]
-pub use basic_image::*;
+pub mod image;
 
 #[cfg(feature = "png")]
 #[cfg_attr(docs_rs, doc(cfg(feature = "png")))]

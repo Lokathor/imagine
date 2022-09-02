@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 //! Module for working with PNG data.
 //!
 //! * [Portable Network Graphics Specification (Second Edition)][png-spec]
@@ -21,8 +23,8 @@
 //!
 //! ## Automatic Decoding
 //!
-//! Just call [ImageRGBA8::try_from_png_bytes](crate::ImageRGBA8::try_from_png_bytes)
-//! and it'll do its best.
+//! Just call [`try_from_png_bytes`](crate::ImageRGBA8::try_from_png_bytes)
+//! and the decoder will do its best.
 //!
 //! This requires the `alloc` and `miniz_oxide` crate features.
 //!
@@ -89,7 +91,7 @@ use core::fmt::{Debug, Write};
 
 use bitfrob::u8_replicate_bits;
 
-use crate::{pixels::RGBA8888, Image};
+use crate::pixels::RGBA8888;
 
 // TODO: CRC support for raw chunks is needed later to write PNG data.
 
@@ -983,7 +985,7 @@ impl IHDR {
 }
 
 #[cfg(all(feature = "alloc", feature = "miniz_oxide"))]
-impl<P> Image<P>
+impl<P> crate::image::Image<P>
 where
   P: From<RGBA8888> + Clone,
 {

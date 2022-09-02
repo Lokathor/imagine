@@ -7,7 +7,7 @@ use core::ops::{Index, IndexMut};
 
 use alloc::vec::Vec;
 
-/// A basic containers for [RGBA8] data.
+/// A basic containers for pixel data.
 ///
 /// * The `pixels` vec should hold `width * height` pixels, row by row. If you
 ///   make your own instance of this type with incorrect `width` and `height`

@@ -1,4 +1,4 @@
-use imagine::{pixels::RGBA8888, png::PngRawChunkIter, Image};
+use imagine::{pixels::RGBA8888, png::PngRawChunkIter};
 use walkdir::WalkDir;
 
 #[test]
@@ -14,8 +14,10 @@ fn test_RawPngChunkIter_no_panics() {
 
 #[test]
 #[cfg(all(feature = "alloc", feature = "miniz_oxide"))]
-fn test_decode_test_pngs() {
+fn test_pngs_do_not_panic_decoder() {
   // iter ALL files in the test folder, even non-png files shouldn't panic it.
+
+  use imagine::image::Image;
   for entry in WalkDir::new("tests/").into_iter().filter_map(|e| e.ok()) {
     if entry.file_type().is_dir() {
       continue;
