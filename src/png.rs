@@ -1,5 +1,3 @@
-#![forbid(unsafe_code)]
-
 //! Module for working with PNG data.
 //!
 //! * [Portable Network Graphics Specification (Second Edition)][png-spec]
