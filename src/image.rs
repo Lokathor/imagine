@@ -7,7 +7,7 @@ use core::ops::{Index, IndexMut};
 
 use alloc::vec::Vec;
 
-/// A basic containers for pixel data.
+/// A basic container for pixel data.
 ///
 /// * The `pixels` vec should hold `width * height` pixels, row by row. If you
 ///   make your own instance of this type with incorrect `width` and `height`
@@ -16,7 +16,6 @@ use alloc::vec::Vec;
 /// * The struct takes no opinion on if the first row is the top or bottom of
 ///   the image, because different image formats and GPU libraries disagree.
 #[derive(Debug, Clone, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
-#[cfg_attr(docs_rs, doc(cfg(feature = "alloc")))]
 pub struct Image<P> {
   /// Image width (in pixels).
   pub width: u32,
@@ -32,7 +31,7 @@ impl<P> Image<P> {
   /// index = y * width + x
   /// ```
   ///
-  /// Does not perform bounds checks.
+  /// Does not perform bounds checks, just does the math.
   ///
   /// You generally don't need to call this method yourself. However, it's whats
   /// used by other accessor methods of this type to generate an index into the

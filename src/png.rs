@@ -91,7 +91,7 @@ use core::fmt::{Debug, Write};
 
 use bitfrob::u8_replicate_bits;
 
-use crate::pixels::RGBA8888;
+use crate::pixel_formats::RGBA8888;
 
 // TODO: CRC support for raw chunks is needed later to write PNG data.
 

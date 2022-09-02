@@ -1,4 +1,4 @@
-use imagine::{pixels::RGBA8888, png::PngRawChunkIter};
+use imagine::{pixel_formats::RGBA8888, png::PngRawChunkIter};
 use walkdir::WalkDir;
 
 #[test]

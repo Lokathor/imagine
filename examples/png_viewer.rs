@@ -1,4 +1,4 @@
-use imagine::{image::Image, pixels::RGBA8888};
+use imagine::{image::Image, pixel_formats::RGBA8888};
 use pixels::{Pixels, SurfaceTexture};
 use winit::{
   dpi::LogicalSize,

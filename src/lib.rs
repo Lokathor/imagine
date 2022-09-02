@@ -9,11 +9,12 @@
 #[cfg(feature = "alloc")]
 extern crate alloc;
 
+pub mod pixel_formats;
+
 #[cfg(feature = "alloc")]
+#[cfg_attr(docs_rs, doc(cfg(feature = "alloc")))]
 pub mod image;
 
 #[cfg(feature = "png")]
 #[cfg_attr(docs_rs, doc(cfg(feature = "png")))]
 pub mod png;
-
-pub mod pixels;
