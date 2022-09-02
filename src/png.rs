@@ -1138,7 +1138,7 @@ where
             } else {
               [data[0], data[1], data[2]]
             };
-            let full = if ihdr.bit_depth{ Some([
+            let full = if ihdr.bit_depth == 16{ Some([
               u16::from_be_bytes([data[0], data[1]]),
               u16::from_be_bytes([data[2], data[3]]),
               u16::from_be_bytes([data[4], data[5]]),
