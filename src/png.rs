@@ -98,6 +98,7 @@ use crate::pixel_formats::{RGBA8888, RGB888};
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[repr(transparent)]
 struct PngRawChunkType([u8; 4]);
+#[allow(nonstandard_style)]
 impl PngRawChunkType {
   pub const IHDR: Self = Self(*b"IHDR");
   pub const PLTE: Self = Self(*b"PLTE");
