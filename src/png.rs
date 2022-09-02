@@ -103,6 +103,7 @@ impl PngRawChunkType {
   pub const PLTE: Self = Self(*b"PLTE");
   pub const IDAT: Self = Self(*b"IDAT");
   pub const IEND: Self = Self(*b"IEND");
+  pub const tRNS: Self = Self(*b"tRNS");
 }
 impl Debug for PngRawChunkType {
   fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
@@ -186,6 +187,8 @@ pub enum PngChunk<'b> {
   IHDR(IHDR),
   /// Palette
   PLTE(PLTE<'b>),
+  /// Transparency
+  tRNS(tRNS<'b>),
   /// Image Data
   IDAT(IDAT<'b>),
   /// Image End
@@ -196,6 +199,7 @@ impl<'b> TryFrom<PngRawChunk<'b>> for PngChunk<'b> {
   fn try_from(raw: PngRawChunk<'b>) -> Result<Self, Self::Error> {
     Ok(match raw.type_ {
       PngRawChunkType::IHDR => {
+        // this can fail, so use `return` to avoid the outer Ok()
         return IHDR::try_from(raw.data).map(PngChunk::IHDR).map_err(|_| raw);
       }
       PngRawChunkType::PLTE => match bytemuck::try_cast_slice::<u8, RGB888>(raw.data) {
@@ -362,6 +366,35 @@ impl TryFrom<&[u8]> for IHDR {
       _ => Err(()),
     }
   }
+}
+
+/// Transparency data
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct tRNS<'b>(&'b [u8]);
+impl<'b> From<&'b [u8]> for tRNS<'b> {
+  #[inline]
+  #[must_use]
+  fn from(data: &'b [u8]) -> Self {
+    Self(data)
+  }
+}
+impl<'b> TryFrom<PngChunk<'b>> for tRNS<'b> {
+  type Error = ();
+  #[inline]
+  fn try_from(value: PngChunk<'b>) -> Result<Self, Self::Error> {
+    match value {
+      PngChunk::tRNS(trns) => Ok(trns),
+      _ => Err(()),
+    }
+  }
+}
+impl Debug for tRNS<'_> {
+  fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+    f.debug_tuple("tRNS").field(&&self.0[..]).field(&self.0.len()).finish()
+  }
+}
+impl<'b> tRNS<'b> {
+  // TODO
 }
 
 /// Palette data
