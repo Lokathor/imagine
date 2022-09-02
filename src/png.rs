@@ -520,6 +520,15 @@ pub fn png_get_header(bytes: &[u8]) -> Option<IHDR> {
     .next()
 }
 
+/// Gets the transparency chunk for the PNG bytes, if any.
+pub fn png_get_transparency(bytes: &[u8]) -> Option<tRNS<'_>> {
+  PngRawChunkIter::new(bytes).filter_map(|raw_chunk| {
+    let png_chunk = PngChunk::try_from(raw_chunk).ok()?;
+    let trns = tRNS::try_from(png_chunk).ok()?;
+    Some(trns)
+  }).next()
+}
+
 /// Gets the palette out of the PNG bytes.
 ///
 /// Each `[u8;3]` in the palette is an `[r8, g8, b8]` color entry.
@@ -1108,6 +1117,17 @@ where
       png_get_palette(bytes).unwrap_or(&[])
     } else {
       &[]
+    };
+    let (trns_y, trns_rgb, trns_alphas): (Option<u16>, Option<[u16;3]>, Option<&[u8]>) = {
+      if let Some(trns) = png_get_transparency(bytes) {
+        (
+          trns.try_to_grayscale(),
+          trns.try_to_rgb(),
+          Some(trns.to_alphas()),
+        )
+      } else {
+        (None, None, None)
+      }
     };
     let unfilter_op = |x: u32, y: u32, data: &[u8]| {
       if let Some(p) = image.get_mut(x, y) {
