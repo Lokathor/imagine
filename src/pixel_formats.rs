@@ -111,5 +111,5 @@ pub struct RGB888 {
   pub g: u8,
   pub b: u8,
 }
-unsafe impl Zeroable for RGBA8888 {}
-unsafe impl Pod for RGBA8888 {}
+unsafe impl Zeroable for RGB888 {}
+unsafe impl Pod for RGB888 {}
