@@ -2,6 +2,20 @@
 
 use bytemuck::{Pod, Zeroable};
 
+/// sRGB Intent for an image.
+///
+/// Unless you're able to color correct, the exact value doesn't really matter.
+/// However, knowing that image data is sRGB or not *at all* can be helpful.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[allow(nonstandard_style)]
+#[allow(missing_docs)]
+pub enum sRGBIntent {
+  Perceptual,
+  RelativeColorimetric,
+  Saturation,
+  AbsoluteColorimetric,
+}
+
 /// Red/Green/Blue/Alpha, u8 per channel.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[repr(C)]

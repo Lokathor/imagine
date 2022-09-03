@@ -91,7 +91,7 @@ use core::fmt::{Debug, Write};
 
 use bitfrob::u8_replicate_bits;
 
-use crate::pixel_formats::{RGB888, RGBA8888};
+use crate::pixel_formats::{sRGBIntent, RGB888, RGBA8888};
 
 // TODO: CRC support for raw chunks is needed later to write PNG data.
 
@@ -105,6 +105,7 @@ impl PngRawChunkType {
   pub const IDAT: Self = Self(*b"IDAT");
   pub const IEND: Self = Self(*b"IEND");
   pub const tRNS: Self = Self(*b"tRNS");
+  pub const sRGB: Self = Self(*b"sRGB");
 }
 impl Debug for PngRawChunkType {
   fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
@@ -191,6 +192,8 @@ pub enum PngChunk<'b> {
   PLTE(PLTE<'b>),
   /// Transparency
   tRNS(tRNS<'b>),
+  /// sRGB Info
+  sRGB(sRGBIntent),
   /// Image Data
   IDAT(IDAT<'b>),
   /// Image End
@@ -209,6 +212,13 @@ impl<'b> TryFrom<PngRawChunk<'b>> for PngChunk<'b> {
         Err(_) => return Err(raw),
       },
       PngRawChunkType::tRNS => PngChunk::tRNS(tRNS::from(raw.data)),
+      PngRawChunkType::sRGB => PngChunk::sRGB(match raw.data.get(0) {
+        Some(0) => sRGBIntent::Perceptual,
+        Some(1) => sRGBIntent::RelativeColorimetric,
+        Some(2) => sRGBIntent::Saturation,
+        Some(3) => sRGBIntent::AbsoluteColorimetric,
+        _ => return Err(raw),
+      }),
       PngRawChunkType::IDAT => PngChunk::IDAT(IDAT::from(raw.data)),
       PngRawChunkType::IEND => PngChunk::IEND,
       _ => return Err(raw),
@@ -527,6 +537,19 @@ pub fn png_get_transparency(bytes: &[u8]) -> Option<tRNS<'_>> {
       let png_chunk = PngChunk::try_from(raw_chunk).ok()?;
       let trns = tRNS::try_from(png_chunk).ok()?;
       Some(trns)
+    })
+    .next()
+}
+
+/// Gets the sRGB info in the PNG, if any
+pub fn png_get_srgb(bytes: &[u8]) -> Option<sRGBIntent> {
+  PngRawChunkIter::new(bytes)
+    .filter_map(|raw_chunk| {
+      let png_chunk = PngChunk::try_from(raw_chunk).ok()?;
+      match png_chunk {
+        PngChunk::sRGB(srgb) => Some(srgb),
+        _ => None,
+      }
     })
     .next()
 }
