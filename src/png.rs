@@ -91,7 +91,7 @@ use core::fmt::{Debug, Write};
 
 use bitfrob::u8_replicate_bits;
 
-use crate::pixel_formats::{RGBA8888, RGB888};
+use crate::pixel_formats::{RGB888, RGBA8888};
 
 // TODO: CRC support for raw chunks is needed later to write PNG data.
 
@@ -522,11 +522,13 @@ pub fn png_get_header(bytes: &[u8]) -> Option<IHDR> {
 
 /// Gets the transparency chunk for the PNG bytes, if any.
 pub fn png_get_transparency(bytes: &[u8]) -> Option<tRNS<'_>> {
-  PngRawChunkIter::new(bytes).filter_map(|raw_chunk| {
-    let png_chunk = PngChunk::try_from(raw_chunk).ok()?;
-    let trns = tRNS::try_from(png_chunk).ok()?;
-    Some(trns)
-  }).next()
+  PngRawChunkIter::new(bytes)
+    .filter_map(|raw_chunk| {
+      let png_chunk = PngChunk::try_from(raw_chunk).ok()?;
+      let trns = tRNS::try_from(png_chunk).ok()?;
+      Some(trns)
+    })
+    .next()
 }
 
 /// Gets the palette out of the PNG bytes.
@@ -830,17 +832,17 @@ impl IHDR {
     let filter_chunk_size = match self.color_type {
       PngColorType::Y => match self.bit_depth {
         16 => 2,
-        8|4|2|1=>1,
-        _=> return Err(()),
-      }
+        8 | 4 | 2 | 1 => 1,
+        _ => return Err(()),
+      },
       PngColorType::RGB => match self.bit_depth {
         8 => 3,
         16 => 6,
         _ => return Err(()),
       },
-      PngColorType::Index => match self.bit_depth{
-        8|4|2|1=> 1,
-        _=> return Err(()),
+      PngColorType::Index => match self.bit_depth {
+        8 | 4 | 2 | 1 => 1,
+        _ => return Err(()),
       },
       PngColorType::YA => match self.bit_depth {
         8 => 2,
@@ -1125,13 +1127,9 @@ where
     } else {
       &[]
     };
-    let (trns_y, trns_rgb, trns_alphas): (Option<u16>, Option<[u16;3]>, Option<&[u8]>) = {
+    let (trns_y, trns_rgb, trns_alphas): (Option<u16>, Option<[u16; 3]>, Option<&[u8]>) = {
       if let Some(trns) = png_get_transparency(bytes) {
-        (
-          trns.try_to_grayscale(),
-          trns.try_to_rgb(),
-          Some(trns.to_alphas()),
-        )
+        (trns.try_to_grayscale(), trns.try_to_rgb(), Some(trns.to_alphas()))
       } else {
         (None, None, None)
       }
@@ -1145,18 +1143,16 @@ where
             } else {
               [data[0], data[1], data[2]]
             };
-            let full = if ihdr.bit_depth == 16{ Some([
-              u16::from_be_bytes([data[0], data[1]]),
-              u16::from_be_bytes([data[2], data[3]]),
-              u16::from_be_bytes([data[4], data[5]]),
-            ])} else {
+            let full = if ihdr.bit_depth == 16 {
+              Some([
+                u16::from_be_bytes([data[0], data[1]]),
+                u16::from_be_bytes([data[2], data[3]]),
+                u16::from_be_bytes([data[4], data[5]]),
+              ])
+            } else {
               Some([data[0] as u16, data[1] as u16, data[2] as u16])
             };
-            let a = if trns_rgb == full {
-              0
-            } else {
-              255
-            };
+            let a = if trns_rgb == full { 0 } else { 255 };
             *p = RGBA8888 { r, g, b, a }.into();
           }
           PngColorType::RGBA => {
@@ -1177,24 +1173,22 @@ where
             } else {
               u8_replicate_bits(ihdr.bit_depth as u32, data[0])
             };
-            let full = if ihdr.bit_depth == 16 {Some(
-              u16::from_be_bytes([data[0], data[1]]),
-            )} else { Some(data[0] as u16) };
-            let a = if trns_y == full {
-              0
+            let full = if ihdr.bit_depth == 16 {
+              Some(u16::from_be_bytes([data[0], data[1]]))
             } else {
-              255
+              Some(data[0] as u16)
             };
+            let a = if trns_y == full { 0 } else { 255 };
             *p = RGBA8888 { r: y, g: y, b: y, a }.into();
           }
           PngColorType::Index => {
-            let RGB888{r,g,b} = *plte.get(data[0] as usize).unwrap_or(&RGB888::default());
+            let RGB888 { r, g, b } = *plte.get(data[0] as usize).unwrap_or(&RGB888::default());
             let a = if let Some(alphas) = trns_alphas {
               *alphas.get(data[0] as usize).unwrap_or(&255)
             } else {
               255
             };
-            *p = RGBA8888{r,g,b,a}.into()
+            *p = RGBA8888 { r, g, b, a }.into()
           }
         }
       } else {
