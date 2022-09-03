@@ -1,4 +1,4 @@
-use imagine::{image::Image, pixel_formats::RGBA8888};
+use imagine::{image::Image, pixel_formats::RGBA8888, png::PngRawChunkIter};
 use pixels::{Pixels, SurfaceTexture};
 use winit::{
   dpi::LogicalSize,
@@ -27,6 +27,10 @@ fn main() {
       return;
     }
   };
+
+  for raw_chunk in PngRawChunkIter::new(&bytes) {
+    println!("{raw_chunk:?}");
+  }
 
   // THIS IS THE COOL PART WHERE WE'RE USING THE LIBRARY TO PARSE A PNG
   let image = match Image::<RGBA8888>::try_from_png_bytes(&bytes) {

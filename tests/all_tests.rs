@@ -1,6 +1,7 @@
 #![allow(bad_style)]
 #![allow(unused_imports)]
 
+#[cfg(feature = "alloc")]
 use imagine::image::Image;
 
 #[cfg(feature = "png")]
