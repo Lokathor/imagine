@@ -411,7 +411,7 @@ impl<'b> TryFrom<PngChunk<'b>> for tRNS<'b> {
 }
 impl Debug for tRNS<'_> {
   fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-    f.debug_tuple("tRNS").field(&&self.0[..]).field(&self.0.len()).finish()
+    f.debug_tuple("tRNS").field(&self.0).field(&self.0.len()).finish()
   }
 }
 impl<'b> tRNS<'b> {

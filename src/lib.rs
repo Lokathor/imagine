@@ -3,6 +3,7 @@
 #![allow(unused_imports)]
 #![warn(missing_docs)]
 #![warn(missing_debug_implementations)]
+#![allow(clippy::get_first)]
 
 //! A crate to work with image data.
 
