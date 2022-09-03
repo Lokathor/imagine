@@ -73,6 +73,18 @@ impl<P> Image<P> {
     let i = self.xy_to_index(x, y);
     self.pixels.get_mut(i)
   }
+  /// Flips the image top to bottom.
+  pub fn vertical_flip(&mut self) {
+    let mut data: &mut [P] = self.pixels.as_mut_slice();
+    let mut temp_height = self.height;
+    while temp_height > 1 {
+      let (low, mid) = data.split_at_mut(self.width as usize);
+      let (mid, high) = mid.split_at_mut(mid.len() - self.width as usize);
+      low.swap_with_slice(high);
+      data = mid;
+      temp_height -= 2;
+    }
+  }
 }
 impl<P> Index<(u32, u32)> for Image<P> {
   type Output = P;
