@@ -1152,12 +1152,14 @@ impl<P> crate::image::Bitmap<P>
 where
   P: From<RGBA8888> + Clone,
 {
-  /// Attempts to make a bitmap from PNG bytes.
+  /// Attempts to make a [Bitmap](crate::image::Bitmap) from PNG bytes.
+  ///
+  /// All pixel types are automatically converted to [RGBA8888].
   ///
   /// ## Failure
   /// Errors include, but are not limited to:
-  /// * Allocation failure.
   /// * No [IHDR] found in the bytes.
+  /// * Allocation failure.
   ///
   /// There's currently no specific error reported, you just get `None`.
   #[cfg_attr(docs_rs, doc(cfg(all(feature = "png", feature = "miniz_oxide"))))]
@@ -1284,12 +1286,13 @@ where
 
 #[cfg(all(feature = "alloc", feature = "miniz_oxide"))]
 impl crate::image::Palmap<u8, RGBA8888> {
-  /// Attempts to make a palmap from PNG bytes.
+  /// Attempts to make a [Palmap](crate::image::Palmap) from PNG bytes.
   ///
   /// ## Failure
   /// Errors include, but are not limited to:
-  /// * Allocation failure.
   /// * No [IHDR] found in the bytes.
+  /// * The PNG's "color type" field (in the header) is not Index color.
+  /// * Allocation failure.
   ///
   /// There's currently no specific error reported, you just get `None`.
   #[cfg_attr(docs_rs, doc(cfg(all(feature = "png", feature = "miniz_oxide"))))]
