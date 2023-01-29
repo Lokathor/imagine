@@ -1340,9 +1340,8 @@ impl crate::image::Palmap<u8, RGBA8888> {
       Some(pal_slice) => pal_slice.iter().map(|rgb| RGBA8888::from(*rgb)).collect(),
       None => return None,
     };
-    match png_get_transparency(bytes) {
-      Some(tRNS(bytes)) => palette.iter_mut().zip(bytes.iter()).for_each(|(p, b)| p.a = *b),
-      None => (),
+    if let Some(tRNS(bytes)) = png_get_transparency(bytes) {
+      palette.iter_mut().zip(bytes.iter()).for_each(|(p, b)| p.a = *b)
     }
     let mut palmap = Self { width: ihdr.width, height: ihdr.height, indexes, palette };
     let unfilter_op = |x: u32, y: u32, data: &[u8]| {
