@@ -1152,14 +1152,14 @@ impl<P> crate::image::Bitmap<P>
 where
   P: From<RGBA8888> + Clone,
 {
-  /// Attempts to make an image from PNG bytes.
+  /// Attempts to make a bitmap from PNG bytes.
   ///
   /// ## Failure
   /// Errors include, but are not limited to:
   /// * Allocation failure.
   /// * No [IHDR] found in the bytes.
   ///
-  /// There's currently no error reporting, you just get `None`.
+  /// There's currently no specific error reported, you just get `None`.
   #[cfg_attr(docs_rs, doc(cfg(all(feature = "png", feature = "miniz_oxide"))))]
   pub fn try_from_png_bytes(bytes: &[u8]) -> Option<Self> {
     use alloc::vec::Vec;
@@ -1279,5 +1279,82 @@ where
       // err during unfiltering, do we care?
     }
     Some(image)
+  }
+}
+
+#[cfg(all(feature = "alloc", feature = "miniz_oxide"))]
+impl crate::image::Palmap<u8, RGBA8888> {
+  /// Attempts to make a palmap from PNG bytes.
+  ///
+  /// ## Failure
+  /// Errors include, but are not limited to:
+  /// * Allocation failure.
+  /// * No [IHDR] found in the bytes.
+  ///
+  /// There's currently no specific error reported, you just get `None`.
+  #[cfg_attr(docs_rs, doc(cfg(all(feature = "png", feature = "miniz_oxide"))))]
+  pub fn try_from_png_bytes(bytes: &[u8]) -> Option<Self> {
+    use alloc::vec::Vec;
+    //
+    let ihdr = match png_get_header(bytes) {
+      Some(ihdr) => ihdr,
+      None => {
+        // No Image Header prevents all further processing.
+        return None;
+      }
+    };
+    if ihdr.color_type != PngColorType::Index {
+      return None;
+    }
+    let zlib_len = ihdr.get_zlib_decompression_requirement();
+    let mut zlib_buffer: Vec<u8> = Vec::new();
+    zlib_buffer.try_reserve(zlib_len).ok()?;
+    // ferris plz make this into a memset
+    zlib_buffer.resize(zlib_len, 0);
+    match miniz_oxide::inflate::decompress_slice_iter_to_slice(
+      &mut zlib_buffer,
+      png_get_idat(bytes),
+      true,
+      true,
+    ) {
+      Ok(decompression_count) => {
+        if decompression_count < zlib_buffer.len() {
+          // potential a cause for concern, but i guess keep going. We already
+          // put enough zeros into the zlib buffer so we'll be able to unfilter
+          // either way.
+        }
+      }
+      Err(_e) => {
+        // should we cancel with an error? The most likely errors are that
+        // there's not actually Zlib compressed data (so we'd have an image of
+        // zeros) or there's too much Zlib compressed data (in which case we
+        // can maybe proceed with partial results).
+      }
+    }
+    let pixel_count = (ihdr.width * ihdr.height) as usize;
+    let mut indexes: Vec<u8> = Vec::new();
+    indexes.try_reserve(pixel_count).ok()?;
+    // ferris plz make this into a memset
+    indexes.resize(pixel_count, 0_u8);
+    let mut palette: Vec<RGBA8888> = match png_get_palette(bytes) {
+      Some(pal_slice) => pal_slice.iter().map(|rgb| RGBA8888::from(*rgb)).collect(),
+      None => return None,
+    };
+    match png_get_transparency(bytes) {
+      Some(tRNS(bytes)) => palette.iter_mut().zip(bytes.iter()).for_each(|(p, b)| p.a = *b),
+      None => (),
+    }
+    let mut palmap = Self { width: ihdr.width, height: ihdr.height, indexes, palette };
+    let unfilter_op = |x: u32, y: u32, data: &[u8]| {
+      if let Some(i) = palmap.get_mut(x, y) {
+        *i = data[0];
+      } else {
+        // attempted out of bounds pixel write, but i guess it doesn't matter?
+      }
+    };
+    if let Err(_e) = ihdr.unfilter_decompressed_data(&mut zlib_buffer, unfilter_op) {
+      // err during unfiltering, do we care?
+    }
+    Some(palmap)
   }
 }
