@@ -1148,7 +1148,7 @@ impl IHDR {
 }
 
 #[cfg(all(feature = "alloc", feature = "miniz_oxide"))]
-impl<P> crate::image::Image<P>
+impl<P> crate::image::Bitmap<P>
 where
   P: From<RGBA8888> + Clone,
 {

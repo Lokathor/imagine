@@ -1,4 +1,4 @@
-use imagine::{image::Image, pixel_formats::RGBA8888, png::PngRawChunkIter};
+use imagine::{image::Bitmap, pixel_formats::RGBA8888, png::PngRawChunkIter};
 use pixels::{Pixels, SurfaceTexture};
 use winit::{
   dpi::LogicalSize,
@@ -33,7 +33,7 @@ fn main() {
   }
 
   // THIS IS THE COOL PART WHERE WE'RE USING THE LIBRARY TO PARSE A PNG
-  let image = match Image::<RGBA8888>::try_from_png_bytes(&bytes) {
+  let image = match Bitmap::<RGBA8888>::try_from_png_bytes(&bytes) {
     Some(image) => image,
     None => {
       println!("Couldn't parse the file as a PNG.");
