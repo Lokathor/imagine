@@ -702,52 +702,52 @@ fn test_reduced_image_dimensions() {
   assert_eq!(reduced_image_dimensions(0, 0), [(0, 0); 8]);
   // one
   for (w, ex) in (1..=8).zip([1, 1, 1, 1, 1, 1, 1, 1]) {
-    assert_eq!(reduced_image_dimensions(w, 0)[1].0, ex, "failed w:{}", w);
+    assert_eq!(reduced_image_dimensions(w, 0)[1].0, ex, "failed w:{w}");
   }
   for (h, ex) in (1..=8).zip([1, 1, 1, 1, 1, 1, 1, 1]) {
-    assert_eq!(reduced_image_dimensions(0, h)[1].1, ex, "failed h:{}", h);
+    assert_eq!(reduced_image_dimensions(0, h)[1].1, ex, "failed h:{h}");
   }
   // two
   for (w, ex) in (1..=8).zip([0, 0, 0, 0, 1, 1, 1, 1]) {
-    assert_eq!(reduced_image_dimensions(w, 0)[2].0, ex, "failed w:{}", w);
+    assert_eq!(reduced_image_dimensions(w, 0)[2].0, ex, "failed w:{w}");
   }
   for (h, ex) in (1..=8).zip([1, 1, 1, 1, 1, 1, 1, 1]) {
-    assert_eq!(reduced_image_dimensions(0, h)[2].1, ex, "failed h:{}", h);
+    assert_eq!(reduced_image_dimensions(0, h)[2].1, ex, "failed h:{h}");
   }
   // three
   for (w, ex) in (1..=8).zip([1, 1, 1, 1, 2, 2, 2, 2]) {
-    assert_eq!(reduced_image_dimensions(w, 0)[3].0, ex, "failed w: {}", w);
+    assert_eq!(reduced_image_dimensions(w, 0)[3].0, ex, "failed w: {w}");
   }
   for (h, ex) in (1..=8).zip([0, 0, 0, 0, 1, 1, 1, 1]) {
-    assert_eq!(reduced_image_dimensions(0, h)[3].1, ex, "failed h: {}", h);
+    assert_eq!(reduced_image_dimensions(0, h)[3].1, ex, "failed h: {h}");
   }
   // four
   for (w, ex) in (1..=8).zip([0, 0, 1, 1, 1, 1, 2, 2]) {
-    assert_eq!(reduced_image_dimensions(w, 0)[4].0, ex, "failed w: {}", w);
+    assert_eq!(reduced_image_dimensions(w, 0)[4].0, ex, "failed w: {w}");
   }
   for (h, ex) in (1..=8).zip([1, 1, 1, 1, 2, 2, 2, 2]) {
-    assert_eq!(reduced_image_dimensions(0, h)[4].1, ex, "failed h: {}", h);
+    assert_eq!(reduced_image_dimensions(0, h)[4].1, ex, "failed h: {h}");
   }
   // five
   for (w, ex) in (1..=8).zip([1, 1, 2, 2, 3, 3, 4, 4]) {
-    assert_eq!(reduced_image_dimensions(w, 0)[5].0, ex, "failed w: {}", w);
+    assert_eq!(reduced_image_dimensions(w, 0)[5].0, ex, "failed w: {w}");
   }
   for (h, ex) in (1..=8).zip([0, 0, 1, 1, 1, 1, 2, 2]) {
-    assert_eq!(reduced_image_dimensions(0, h)[5].1, ex, "failed h: {}", h);
+    assert_eq!(reduced_image_dimensions(0, h)[5].1, ex, "failed h: {h}");
   }
   // six
   for (w, ex) in (1..=8).zip([0, 1, 1, 2, 2, 3, 3, 4]) {
-    assert_eq!(reduced_image_dimensions(w, 0)[6].0, ex, "failed w: {}", w);
+    assert_eq!(reduced_image_dimensions(w, 0)[6].0, ex, "failed w: {w}");
   }
   for (h, ex) in (1..=8).zip([1, 1, 2, 2, 3, 3, 4, 4]) {
-    assert_eq!(reduced_image_dimensions(0, h)[6].1, ex, "failed h: {}", h);
+    assert_eq!(reduced_image_dimensions(0, h)[6].1, ex, "failed h: {h}");
   }
   // seven
   for (w, ex) in (1..=8).zip([1, 2, 3, 4, 5, 6, 7, 8]) {
-    assert_eq!(reduced_image_dimensions(w, 0)[7].0, ex, "failed w: {}", w);
+    assert_eq!(reduced_image_dimensions(w, 0)[7].0, ex, "failed w: {w}");
   }
   for (h, ex) in (1..=8).zip([0, 1, 1, 2, 2, 3, 3, 4]) {
-    assert_eq!(reduced_image_dimensions(0, h)[7].1, ex, "failed h: {}", h);
+    assert_eq!(reduced_image_dimensions(0, h)[7].1, ex, "failed h: {h}");
   }
   //
   assert_eq!(
@@ -813,7 +813,7 @@ impl IHDR {
         let mut mask = 0b1000_0000;
         let mut down_shift = 7;
         for plus_x in 0..8 {
-          let (image_x, image_y) =
+          let (image_x, image_y): (u32, u32) =
             interlaced_pos_to_full_pos(image_level, reduced_x * 8 + plus_x, reduced_y);
           if image_x >= full_width {
             // if we've gone outside the image's bounds then we're looking at
@@ -821,7 +821,7 @@ impl IHDR {
             // call of the function.
             return;
           }
-          op(image_x as u32, image_y as u32, &[(full_data & mask) >> down_shift]);
+          op(image_x, image_y, &[(full_data & mask) >> down_shift]);
           mask >>= 1;
           down_shift -= 1;
         }
@@ -839,7 +839,7 @@ impl IHDR {
             // call of the function.
             return;
           }
-          op(image_x as u32, image_y as u32, &[(full_data & mask) >> down_shift]);
+          op(image_x, image_y, &[(full_data & mask) >> down_shift]);
           mask >>= 2;
           down_shift -= 2;
         }
@@ -857,14 +857,14 @@ impl IHDR {
             // call of the function.
             return;
           }
-          op(image_x as u32, image_y as u32, &[(full_data & mask) >> down_shift]);
+          op(image_x, image_y, &[(full_data & mask) >> down_shift]);
           mask >>= 4;
           down_shift -= 4;
         }
       }
       8 | 16 => {
         let (image_x, image_y) = interlaced_pos_to_full_pos(image_level, reduced_x, reduced_y);
-        op(image_x as u32, image_y as u32, data);
+        op(image_x, image_y, data);
       }
       _ => unreachable!(),
     }
