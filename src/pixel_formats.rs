@@ -30,6 +30,13 @@ pub struct RGBA8888 {
 }
 unsafe impl Zeroable for RGBA8888 {}
 unsafe impl Pod for RGBA8888 {}
+impl From<RGB888> for RGBA8888 {
+  #[inline]
+  #[must_use]
+  fn from(RGB888 { r, g, b }: RGB888) -> Self {
+    Self { r, g, b, a: 0xFF }
+  }
+}
 
 /// Alpha/Red/Green/Blue, u8 per channel.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
