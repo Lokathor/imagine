@@ -31,6 +31,7 @@ pub struct RGBA8888 {
 unsafe impl Zeroable for RGBA8888 {}
 unsafe impl Pod for RGBA8888 {}
 impl From<RGB888> for RGBA8888 {
+  /// Gives an alpha value of `0xFF`
   #[inline]
   #[must_use]
   fn from(RGB888 { r, g, b }: RGB888) -> Self {
