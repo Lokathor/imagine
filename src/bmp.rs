@@ -1722,7 +1722,7 @@ where
   }
 }
 
-#[cfg(all(feature = "alloc", feature = "miniz_oxide"))]
+#[cfg(feature = "alloc")]
 impl<P> crate::image::Palmap<u8, P>
 where
   P: From<RGBA8888> + Clone,
