@@ -1892,7 +1892,7 @@ where
           }
           8 => {
             let mut per_row_op = |i: &mut dyn Iterator<Item = (usize, &[u8])>| {
-              while let Some((y, data_row)) = i.next() {
+              for (y, data_row) in i {
                 for (x, pal_index) in
                   data_row[..no_padding_bytes_per_line].iter().copied().enumerate()
                 {
@@ -1909,7 +1909,7 @@ where
           }
           24 => {
             let mut per_row_op = |i: &mut dyn Iterator<Item = (usize, &[u8])>| {
-              while let Some((y, data_row)) = i.next() {
+              for (y, data_row) in i {
                 for (x, [r, g, b]) in
                   cast_slice::<u8, [u8; 3]>(&data_row[..no_padding_bytes_per_line])
                     .iter()
@@ -1939,7 +1939,7 @@ where
             //
             #[rustfmt::skip]
             let mut per_row_op = |i: &mut dyn Iterator<Item = (usize, &[u8])>| {
-              while let Some((y, data_row)) = i.next() {
+              for (y, data_row) in i {
                 for (x, data) in cast_slice::<u8, [u8; 2]>(&data_row[..no_padding_bytes_per_line])
                   .iter()
                   .copied()
@@ -1952,7 +1952,7 @@ where
                   let b: u8 = if b_mask != 0 { ((((u & b_mask) >> b_shift) as f32 / b_max) * 255.0) as u8 } else { 0 };
                   let a: u8 = if a_mask != 0 { ((((u & a_mask) >> a_shift) as f32 / a_max) * 255.0) as u8 } else { 0xFF };
                   let p: P = RGBA8888 { r, g, b, a }.into();
-                  final_storage[(y * width + x) as usize] = p;
+                  final_storage[y * width + x] = p;
                 }
               }
             };
@@ -1974,7 +1974,7 @@ where
             //
             #[rustfmt::skip]
             let mut per_row_op = |i: &mut dyn Iterator<Item = (usize, &[u8])>| {
-              while let Some((y, data_row)) = i.next() {
+              for (y, data_row) in i {
                 for (x, data) in cast_slice::<u8, [u8; 4]>(&data_row[..no_padding_bytes_per_line])
                   .iter()
                   .copied()
@@ -1987,7 +1987,7 @@ where
                   let b: u8 = if b_mask != 0 { ((((u & b_mask) >> b_shift) as f32 / b_max) * 255.0) as u8 } else { 0 };
                   let a: u8 = if a_mask != 0 { ((((u & a_mask) >> a_shift) as f32 / a_max) * 255.0) as u8 } else { 0xFF };
                   let p: P = RGBA8888 { r, g, b, a }.into();
-                  final_storage[(y * width + x) as usize] = p;
+                  final_storage[y * width + x] = p;
                 }
               }
             };
@@ -2075,9 +2075,12 @@ where
                     // q byte
                     let p: P = palette.get(q as usize).copied().unwrap_or_default().into();
                     let i = y * width + x;
-                    // If this goes OOB then that's the fault of the encoder and
-                    // it's better to just drop some data than to panic.
-                    final_storage.get_mut(i).map(|c| *c = p);
+                    // If this goes OOB then that's the fault of the encoder
+                    // that made this file and it's better to just drop some
+                    // data than to panic.
+                    if let Some(c) = final_storage.get_mut(i) {
+                      *c = p;
+                    }
                     x += 1;
 
                     // If `raw_count` is only 1 then we don't output the `w` byte.
@@ -2085,7 +2088,9 @@ where
                       // w byte
                       let p: P = palette.get(w as usize).copied().unwrap_or_default().into();
                       let i = y * width + x;
-                      final_storage.get_mut(i).map(|c| *c = p.clone());
+                      if let Some(c) = final_storage.get_mut(i) {
+                        *c = p.clone();
+                      }
                       x += 1;
                     }
                   } else {
@@ -2127,8 +2132,8 @@ where
             let p_l: P =
               palette.get((pal_index & 0b1111) as usize).copied().unwrap_or_default().into();
             let count = count as usize;
-            debug_assert!(x < width, "x:{}, width:{}", x, width);
-            debug_assert!(y < height, "y:{}, height:{}", y, height);
+            debug_assert!(x < width, "x:{x}, width:{width}");
+            debug_assert!(y < height, "y:{y}, height:{height}");
             let i = y * width + x;
             let target_slice_mut: &mut [P] = if i + count < final_storage.len() {
               &mut final_storage[i..(i + count)]
@@ -2193,7 +2198,9 @@ where
                         // report error?
                       }
                       let p_h: P = palette.get(pal_index).copied().unwrap_or_default().into();
-                      final_storage.get_mut(i).map(|c| *c = p_h);
+                      if let Some(c) = final_storage.get_mut(i) {
+                        *c = p_h.clone();
+                      }
                       x += 1;
                       raw_count = raw_count.saturating_sub(1);
                       if raw_count == 0 {
