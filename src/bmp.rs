@@ -991,7 +991,7 @@ impl TryFrom<[u8; 52]> for BmpInfoHeaderV2 {
     let green_mask = u32_le(&a[44..48]);
     let blue_mask = u32_le(&a[48..52]);
     if size != 52 {
-      return Err(IncorrectSizeForThisInfoHeaderVersion);
+      Err(IncorrectSizeForThisInfoHeaderVersion)
     } else {
       Ok(Self {
         width,
@@ -1136,7 +1136,7 @@ impl TryFrom<[u8; 56]> for BmpInfoHeaderV3 {
     let blue_mask = u32_le(&a[48..52]);
     let alpha_mask = u32_le(&a[52..56]);
     if size != 56 {
-      return Err(IncorrectSizeForThisInfoHeaderVersion);
+      Err(IncorrectSizeForThisInfoHeaderVersion)
     } else {
       Ok(Self {
         width,
@@ -1425,7 +1425,7 @@ impl TryFrom<[u8; 108]> for BmpInfoHeaderV4 {
       x
     });
     if size != 108 {
-      return Err(IncorrectSizeForThisInfoHeaderVersion);
+      Err(IncorrectSizeForThisInfoHeaderVersion)
     } else {
       Ok(Self {
         width,
