@@ -129,7 +129,7 @@ pub enum BmpError {
 
 use bytemuck::cast;
 
-use crate::pixel_formats::sRGBIntent;
+use crate::pixel_formats::{sRGBIntent, RGBA8888};
 
 #[inline]
 #[must_use]
@@ -1208,7 +1208,9 @@ const LCS_WINDOWS_COLOR_SPACE: u32 = 0x5769_6E20;
 const PROFILE_LINKED: u32 = 0x4C49_4E4B;
 const PROFILE_EMBEDDED: u32 = 0x4D42_4544;
 
+/// Colorspace data for the BMP.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[allow(missing_docs)]
 pub enum BmpColorspace {
   /// The usual sRGB colorspace.
   Srgb,
@@ -1319,6 +1321,7 @@ pub type FXPT2DOT30 = u32;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[repr(C)]
+#[allow(missing_docs)]
 pub struct CIEXYZ {
   pub x: FXPT2DOT30,
   pub y: FXPT2DOT30,
@@ -1327,6 +1330,7 @@ pub struct CIEXYZ {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[repr(C)]
+#[allow(missing_docs)]
 pub struct CIEXYZTRIPLE {
   pub red: CIEXYZ,
   pub green: CIEXYZ,
@@ -1704,5 +1708,27 @@ impl BmpInfoHeaderV5 {
         }
       }
     }
+  }
+}
+
+#[cfg(feature = "alloc")]
+impl<P> crate::image::Bitmap<P>
+where
+  P: From<RGBA8888> + Clone,
+{
+  #[cfg_attr(docs_rs, doc(cfg(all(feature = "bmp", feature = "miniz_oxide"))))]
+  pub fn try_from_bmp_bytes(bytes: &[u8]) -> Option<Self> {
+    todo!()
+  }
+}
+
+#[cfg(all(feature = "alloc", feature = "miniz_oxide"))]
+impl<P> crate::image::Palmap<u8, P>
+where
+  P: From<RGBA8888> + Clone,
+{
+  #[cfg_attr(docs_rs, doc(cfg(all(feature = "bmp", feature = "miniz_oxide"))))]
+  pub fn try_from_bmp_bytes(bytes: &[u8]) -> Option<Self> {
+    todo!()
   }
 }
