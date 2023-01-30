@@ -1718,6 +1718,7 @@ where
 {
   #[cfg_attr(docs_rs, doc(cfg(all(feature = "bmp", feature = "miniz_oxide"))))]
   pub fn try_from_bmp_bytes(bytes: &[u8]) -> Option<Self> {
+    // https://github.com/Lokathor/imagine/blob/da17bf5e0bdde3b274bff4799a8e5eb35d516cc9/examples/demo.rs#L374-L881
     todo!()
   }
 }
