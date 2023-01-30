@@ -1806,7 +1806,7 @@ where
             };
             rest = new_rest;
             let pal_slice: &[[u8; 3]] = cast_slice(pal_slice);
-            for [r, g, b] in pal_slice.iter().copied() {
+            for [b, g, r] in pal_slice.iter().copied() {
               v.push(RGBA8888 { r, g, b, a: 0xFF });
             }
           }
@@ -1819,7 +1819,7 @@ where
             };
             rest = new_rest;
             let pal_slice: &[[u8; 4]] = cast_slice(pal_slice);
-            for [r, g, b, a] in pal_slice.iter().copied() {
+            for [b, g, r, a] in pal_slice.iter().copied() {
               v.push(RGBA8888 { r, g, b, a });
             }
             if v.iter().copied().all(|c| c.a == 0) {
@@ -1910,7 +1910,7 @@ where
           24 => {
             let mut per_row_op = |i: &mut dyn Iterator<Item = (usize, &[u8])>| {
               for (y, data_row) in i {
-                for (x, [r, g, b]) in
+                for (x, [b, g, r]) in
                   cast_slice::<u8, [u8; 3]>(&data_row[..no_padding_bytes_per_line])
                     .iter()
                     .copied()
