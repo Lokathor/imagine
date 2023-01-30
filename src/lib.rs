@@ -19,3 +19,7 @@ pub mod image;
 #[cfg(feature = "png")]
 #[cfg_attr(docs_rs, doc(cfg(feature = "png")))]
 pub mod png;
+
+#[cfg(feature = "bmp")]
+#[cfg_attr(docs_rs, doc(cfg(feature = "bmp")))]
+pub mod bmp;
