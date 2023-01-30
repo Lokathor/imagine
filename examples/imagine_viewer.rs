@@ -1,4 +1,4 @@
-use imagine::{image::Bitmap, pixel_formats::RGBA8888, png::PngRawChunkIter};
+use imagine::{image::Bitmap, pixel_formats::RGBA8888};
 use pixels::{Pixels, SurfaceTexture};
 use winit::{
   dpi::LogicalSize,
@@ -28,17 +28,16 @@ fn main() {
     }
   };
 
-  for raw_chunk in PngRawChunkIter::new(&bytes) {
-    println!("{raw_chunk:?}");
-  }
-
   // THIS IS THE COOL PART WHERE WE'RE USING THE LIBRARY TO PARSE A PNG
   let image = match Bitmap::<RGBA8888>::try_from_png_bytes(&bytes) {
     Some(image) => image,
-    None => {
-      println!("Couldn't parse the file as a PNG.");
-      return;
-    }
+    None => match Bitmap::<RGBA8888>::try_from_bmp_bytes(&bytes).ok() {
+      Some(image) => image,
+      None => {
+        println!("Couldn't parse the file.");
+        return;
+      }
+    },
   };
 
   // Generic "make it show up on the screen" stuff.
@@ -46,7 +45,7 @@ fn main() {
   let window = {
     let size = LogicalSize::new(image.width as f64, image.height as f64);
     WindowBuilder::new()
-      .with_title("Hello PNG")
+      .with_title("imagine viewer (demo!)")
       .with_inner_size(size)
       .with_min_inner_size(size)
       .with_max_inner_size(size)

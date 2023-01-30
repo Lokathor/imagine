@@ -37,5 +37,5 @@ name = "png_chunk_print"
 required-features = ["png"]
 
 [[example]]
-name = "png_viewer"
-required-features = ["alloc", "png", "miniz_oxide"]
+name = "imagine_viewer"
+required-features = ["alloc", "png", "miniz_oxide", "bmp"]
