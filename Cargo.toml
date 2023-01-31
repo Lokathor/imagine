@@ -2,7 +2,7 @@
 name = "imagine"
 description = "A crate to help with images."
 repository = "https://github.com/Lokathor/imagine"
-version = "0.3.0"
+version = "0.3.1"
 edition = "2021"
 license = "Zlib OR Apache-2.0 OR MIT"
 categories = ["encoding", "no-std"]
