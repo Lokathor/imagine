@@ -89,3 +89,21 @@ impl<I, P> Palmap<I, P> {
     }
   }
 }
+
+impl<I, P, B> From<&Palmap<I, P>> for Bitmap<B>
+where
+  usize: From<I>,
+  I: Clone,
+  B: From<P>,
+  P: Clone + Default,
+{
+  fn from(palmap: &Palmap<I, P>) -> Self {
+    let pixels: Vec<B> = palmap
+      .indexes
+      .iter()
+      .cloned()
+      .map(|i| B::from(palmap.palette.get(usize::from(i)).cloned().unwrap_or_default()))
+      .collect();
+    Bitmap { width: palmap.width, height: palmap.height, pixels }
+  }
+}
