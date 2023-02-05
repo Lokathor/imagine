@@ -38,6 +38,12 @@ impl From<RGB888> for RGBA8888 {
     Self { r, g, b, a: 0xFF }
   }
 }
+impl RGBA8888 {
+  /// Black, RGB all 0, full alpha.
+  pub const BLACK: Self = Self { r: 0, g: 0, b: 0, a: 0xFF };
+  /// White, all channels full.
+  pub const WHITE: Self = Self { r: 0xFF, g: 0xFF, b: 0xFF, a: 0xFF };
+}
 
 /// Alpha/Red/Green/Blue, u8 per channel.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]

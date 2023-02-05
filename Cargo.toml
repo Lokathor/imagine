@@ -10,17 +10,18 @@ categories = ["encoding", "no-std"]
 autoexamples = false
 
 [features]
-default = ["alloc", "png", "bmp"]
+default = ["alloc", "png", "miniz_oxide", "bmp", "netpbm"]
 align_pixels = [] # Causes 4-byte pixel structs to be align=4 (normaly they're align=1)
 alloc = []
 png = [] # Portable Network Graphics
 bmp = [] # Windows Bitmap
-#netpbm = [] # Covers all the Netpbm files: pbm, pgm, ppm, pnm, pam
+netpbm = ["wide"] # Covers all the Netpbm files: pbm, pgm, ppm, pnm, pam
 
 [dependencies]
 bytemuck = { version = "1.11" }
 bitfrob = "0.2.3"
 miniz_oxide = { version = "0.6", default-features = false, optional = true }
+wide = { version = "0.7.6", default-features = false, optional = true }
 
 [dev-dependencies]
 getrandom = "0.2.7"

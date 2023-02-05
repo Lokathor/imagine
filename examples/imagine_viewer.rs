@@ -33,10 +33,13 @@ fn main() {
     Some(image) => image,
     None => match Bitmap::<RGBA8888>::try_from_bmp_bytes(&bytes).ok() {
       Some(image) => image,
-      None => {
-        println!("Couldn't parse the file.");
-        return;
-      }
+      None => match Bitmap::<RGBA8888>::try_from_netpbm_bytes(&bytes).ok() {
+        Some(image) => image,
+        None => {
+          println!("Couldn't parse the file.");
+          return;
+        }
+      },
     },
   };
 

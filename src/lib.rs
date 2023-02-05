@@ -24,3 +24,8 @@ pub mod png;
 #[cfg(feature = "bmp")]
 #[cfg_attr(docs_rs, doc(cfg(feature = "bmp")))]
 pub mod bmp;
+
+#[cfg(feature = "netpbm")]
+#[cfg_attr(docs_rs, doc(cfg(feature = "netpbm")))]
+#[allow(missing_docs)]
+pub mod netpbm;
