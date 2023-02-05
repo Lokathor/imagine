@@ -18,7 +18,7 @@ bmp = [] # Windows Bitmap
 netpbm = ["wide"] # Covers all the Netpbm files: pbm, pgm, ppm, pnm, pam
 
 [dependencies]
-bytemuck = { version = "1.11" }
+bytemuck = "1.11"
 bitfrob = "0.2.3"
 miniz_oxide = { version = "0.6", default-features = false, optional = true }
 wide = { version = "0.7.6", default-features = false, optional = true }
