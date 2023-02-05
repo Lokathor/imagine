@@ -126,6 +126,7 @@ pub struct PngRawChunk<'b> {
   declared_crc: u32,
 }
 impl Debug for PngRawChunk<'_> {
+  #[inline]
   fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
     f.debug_struct("PngRawChunk")
       .field("type_", &self.type_)
@@ -141,6 +142,7 @@ impl Debug for PngRawChunk<'_> {
 pub struct PngRawChunkIter<'b>(&'b [u8]);
 impl<'b> PngRawChunkIter<'b> {
   /// Pass the full PNG bytes, it will remove the PNG header automatically.
+  #[inline]
   pub const fn new(bytes: &'b [u8]) -> Self {
     match bytes {
       [_, _, _, _, _, _, _, _, rest @ ..] => Self(rest),
@@ -150,6 +152,7 @@ impl<'b> PngRawChunkIter<'b> {
 }
 impl<'b> Iterator for PngRawChunkIter<'b> {
   type Item = PngRawChunk<'b>;
+  #[inline]
   fn next(&mut self) -> Option<Self::Item> {
     let chunk_len: u32 = if self.0.len() >= 4 {
       let (len_bytes, rest) = self.0.split_at(4);
@@ -204,6 +207,7 @@ pub enum PngChunk<'b> {
 }
 impl<'b> TryFrom<PngRawChunk<'b>> for PngChunk<'b> {
   type Error = PngRawChunk<'b>;
+  #[inline]
   fn try_from(raw: PngRawChunk<'b>) -> Result<Self, Self::Error> {
     Ok(match raw.type_ {
       PngRawChunkType::IHDR => {
@@ -253,6 +257,7 @@ pub enum PngColorType {
 }
 impl PngColorType {
   /// The number of channels in this type of color.
+  #[inline]
   pub const fn channel_count(self) -> usize {
     match self {
       Self::Y => 1,
@@ -265,6 +270,7 @@ impl PngColorType {
 }
 impl TryFrom<u8> for PngColorType {
   type Error = ();
+  #[inline]
   fn try_from(value: u8) -> Result<Self, Self::Error> {
     Ok(match value {
       0 => PngColorType::Y,
@@ -297,6 +303,7 @@ impl IHDR {
   /// You can call this if you must, but it complicates the apparent API to have
   /// it visible because most people don't ever need this.
   #[doc(hidden)]
+  #[inline]
   pub const fn bytes_per_filterline(&self, width: u32) -> usize {
     // each line is a filter byte (1) + pixel data. When pixels are less than 8
     // bits per channel it's possible to end up with partial bytes on the end,
@@ -305,6 +312,7 @@ impl IHDR {
   }
 
   /// Gets the buffer size required to perform Zlib decompression.
+  #[inline]
   pub fn get_zlib_decompression_requirement(&self) -> usize {
     /// Get the temp bytes for a given image.
     ///
@@ -345,6 +353,7 @@ impl IHDR {
   /// You can call this if you must, but it complicates the apparent API to have
   /// it visible because most people don't ever need this.
   #[doc(hidden)]
+  #[inline]
   pub const fn bits_per_pixel(&self) -> usize {
     (self.bit_depth as usize) * self.color_type.channel_count()
   }
@@ -361,6 +370,7 @@ impl TryFrom<PngChunk<'_>> for IHDR {
 }
 impl TryFrom<&[u8]> for IHDR {
   type Error = ();
+  #[inline]
   fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
     match value {
       [w0, w1, w2, w3, h0, h1, h2, h3, bit_depth, color_type, _compression_method, _filter_method, interlace_method] => {
@@ -410,6 +420,7 @@ impl<'b> TryFrom<PngChunk<'b>> for tRNS<'b> {
   }
 }
 impl Debug for tRNS<'_> {
+  #[inline]
   fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
     f.debug_tuple("tRNS").field(&self.0).field(&self.0.len()).finish()
   }
@@ -440,6 +451,7 @@ impl<'b> tRNS<'b> {
     }
   }
   /// Gets the alpha values for each palette index.
+  #[inline]
   pub const fn to_alphas(&self) -> &'b [u8] {
     self.0
   }
@@ -510,6 +522,7 @@ impl<'b> TryFrom<PngChunk<'b>> for PLTE<'b> {
   }
 }
 impl Debug for PLTE<'_> {
+  #[inline]
   fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
     // currently prints no more than 4 palette entries
     f.debug_tuple("PLTE").field(&&self.0[..self.0.len().min(4)]).field(&self.0.len()).finish()
@@ -517,6 +530,7 @@ impl Debug for PLTE<'_> {
 }
 impl<'b> PLTE<'b> {
   /// Gets the entries as a slice.
+  #[inline]
   pub fn entries(&self) -> &'b [RGB888] {
     self.0
   }
@@ -547,6 +561,7 @@ impl<'b> TryFrom<PngChunk<'b>> for IDAT<'b> {
   }
 }
 impl Debug for IDAT<'_> {
+  #[inline]
   fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
     f.debug_tuple("IDAT").field(&&self.0[..self.0.len().min(12)]).field(&self.0.len()).finish()
   }
@@ -562,11 +577,13 @@ impl<'b> IDAT<'b> {
 /// * If this is the case, the rest of the bytes are very likely PNG data.
 /// * If this is *not* the case, the rest of the bytes are very likely *not* PNG
 ///   data.
+#[inline]
 pub const fn is_png_header_correct(bytes: &[u8]) -> bool {
   matches!(bytes, [137, 80, 78, 71, 13, 10, 26, 10, ..])
 }
 
 /// Gets the [IHDR] out of the PNG bytes.
+#[inline]
 pub fn png_get_header(bytes: &[u8]) -> Option<IHDR> {
   PngRawChunkIter::new(bytes)
     .filter_map(|raw_chunk| {
@@ -577,6 +594,7 @@ pub fn png_get_header(bytes: &[u8]) -> Option<IHDR> {
 }
 
 /// Gets the transparency chunk for the PNG bytes, if any.
+#[inline]
 pub fn png_get_transparency(bytes: &[u8]) -> Option<tRNS<'_>> {
   PngRawChunkIter::new(bytes)
     .filter_map(|raw_chunk| {
@@ -588,6 +606,7 @@ pub fn png_get_transparency(bytes: &[u8]) -> Option<tRNS<'_>> {
 }
 
 /// Gets the background color information, if any.
+#[inline]
 pub fn png_get_background_color(bytes: &[u8]) -> Option<bKGD> {
   PngRawChunkIter::new(bytes)
     .filter_map(|raw_chunk| {
@@ -599,6 +618,7 @@ pub fn png_get_background_color(bytes: &[u8]) -> Option<bKGD> {
 }
 
 /// Gets the sRGB info in the PNG, if any
+#[inline]
 pub fn png_get_srgb(bytes: &[u8]) -> Option<sRGBIntent> {
   PngRawChunkIter::new(bytes)
     .filter_map(|raw_chunk| {
@@ -614,6 +634,7 @@ pub fn png_get_srgb(bytes: &[u8]) -> Option<sRGBIntent> {
 /// Gets the palette out of the PNG bytes.
 ///
 /// Each `[u8;3]` in the palette is an `[r8, g8, b8]` color entry.
+#[inline]
 pub fn png_get_palette(bytes: &[u8]) -> Option<&[RGB888]> {
   PngRawChunkIter::new(bytes)
     .filter_map(|raw_chunk| {
@@ -625,6 +646,7 @@ pub fn png_get_palette(bytes: &[u8]) -> Option<&[RGB888]> {
 }
 
 /// Gets an iterator over all the [IDAT] slices in the PNG bytes.
+#[inline]
 pub fn png_get_idat(bytes: &[u8]) -> impl Iterator<Item = &[u8]> {
   PngRawChunkIter::new(bytes).filter_map(|raw_chunk| {
     let png_chunk = PngChunk::try_from(raw_chunk).ok()?;
@@ -875,6 +897,7 @@ impl IHDR {
   ///
   /// See the [`png` module docs](crate::png) for guidance.
   #[allow(clippy::result_unit_err)]
+  #[allow(clippy::missing_inline_in_public_items)]
   pub fn unfilter_decompressed_data<F>(
     &self, mut decompressed: &mut [u8], mut op: F,
   ) -> Result<(), ()>
@@ -1163,6 +1186,7 @@ where
   ///
   /// There's currently no specific error reported, you just get `None`.
   #[cfg_attr(docs_rs, doc(cfg(all(feature = "png", feature = "miniz_oxide"))))]
+  #[allow(clippy::missing_inline_in_public_items)]
   pub fn try_from_png_bytes(bytes: &[u8]) -> Option<Self> {
     use alloc::vec::Vec;
     //
@@ -1296,6 +1320,7 @@ impl crate::image::Palmap<u8, RGBA8888> {
   ///
   /// There's currently no specific error reported, you just get `None`.
   #[cfg_attr(docs_rs, doc(cfg(all(feature = "png", feature = "miniz_oxide"))))]
+  #[allow(clippy::missing_inline_in_public_items)]
   pub fn try_from_png_bytes(bytes: &[u8]) -> Option<Self> {
     use alloc::vec::Vec;
     //

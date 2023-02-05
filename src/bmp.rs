@@ -83,6 +83,7 @@ impl<const N: usize> Default for AsciiArray<N> {
 }
 
 impl<const N: usize> core::fmt::Debug for AsciiArray<N> {
+  #[inline]
   fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
     f.write_char('\"')?;
     for ch in self.0.iter().copied().map(|u| u as char) {
@@ -93,6 +94,7 @@ impl<const N: usize> core::fmt::Debug for AsciiArray<N> {
   }
 }
 impl<const N: usize> core::fmt::Display for AsciiArray<N> {
+  #[inline]
   fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
     for ch in self.0.iter().copied().map(|u| u as char) {
       f.write_char(ch)?;
@@ -226,6 +228,7 @@ impl From<[u8; 14]> for BmpFileHeader {
   }
 }
 impl From<BmpFileHeader> for [u8; 14] {
+  #[inline]
   fn from(h: BmpFileHeader) -> Self {
     let mut a = [0; 14];
     a[0..2].copy_from_slice(h.tag.0.as_slice());
@@ -713,6 +716,7 @@ impl From<[u8; 10]> for Halftoning {
   }
 }
 impl From<Halftoning> for [u8; 10] {
+  #[inline]
   fn from(h: Halftoning) -> Self {
     let mut a = [0; 10];
     match h {
@@ -1238,6 +1242,7 @@ pub enum BmpColorspace {
   Unknown { endpoints: CIEXYZTRIPLE, gamma_red: u32, gamma_green: u32, gamma_blue: u32 },
 }
 impl From<[u8; 52]> for BmpColorspace {
+  #[inline]
   fn from(a: [u8; 52]) -> Self {
     match u32_le(&a[0..4]) {
       LCS_CALIBRATED_RGB => BmpColorspace::Calibrated {
@@ -1268,6 +1273,7 @@ impl From<[u8; 52]> for BmpColorspace {
   }
 }
 impl From<BmpColorspace> for [u8; 52] {
+  #[inline]
   fn from(c: BmpColorspace) -> Self {
     let mut a = [0; 52];
     match c {
@@ -1727,6 +1733,7 @@ where
   /// * Incorrect Bmp File Header.
   /// * Allocation failure.
   #[cfg_attr(docs_rs, doc(cfg(all(feature = "bmp", feature = "miniz_oxide"))))]
+  #[allow(clippy::missing_inline_in_public_items)]
   pub fn try_from_bmp_bytes(bytes: &[u8]) -> Result<Self, BmpError> {
     use alloc::vec::Vec;
     use bytemuck::cast_slice;
@@ -1781,8 +1788,8 @@ where
     // non-zero alpha mask then we assume the image is alpha aware and pixels
     // default to transparent black. otherwise we assume that the image doesn't
     // know about alpha and use opaque black as the default. This is significant
-    // because the RLE compresions can skip touching some pixels entirely and just
-    // leave the default color in place.
+    // because the RLE compressions can skip touching some pixels entirely and
+    // just leave the default color in place.
     let mut final_storage: Vec<P> = Vec::new();
     final_storage.try_reserve(pixel_count).map_err(|_| BmpError::AllocError)?;
     final_storage.resize(
@@ -2245,6 +2252,7 @@ where
   /// * Incorrect Bmp File Header.
   /// * Allocation failure.
   #[cfg_attr(docs_rs, doc(cfg(all(feature = "bmp", feature = "miniz_oxide"))))]
+  #[allow(clippy::missing_inline_in_public_items)]
   pub fn try_from_bmp_bytes(bytes: &[u8]) -> Result<Self, BmpError> {
     use alloc::vec::Vec;
     use bytemuck::cast_slice;

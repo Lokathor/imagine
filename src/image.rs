@@ -41,6 +41,7 @@ impl<P> Bitmap<P> {
     }
   }
   /// Flips the image top to bottom.
+  #[inline]
   pub fn vertical_flip(&mut self) {
     let mut data: &mut [P] = self.pixels.as_mut_slice();
     let mut temp_height = self.height;
@@ -77,6 +78,7 @@ impl<I, P> Palmap<I, P> {
     }
   }
   /// Flips the image top to bottom.
+  #[inline]
   pub fn vertical_flip(&mut self) {
     let mut data: &mut [I] = self.indexes.as_mut_slice();
     let mut temp_height = self.height;
@@ -97,6 +99,7 @@ where
   B: From<P>,
   P: Clone + Default,
 {
+  #[inline]
   fn from(palmap: &Palmap<I, P>) -> Self {
     let pixels: Vec<B> = palmap
       .indexes
