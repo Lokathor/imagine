@@ -14,7 +14,7 @@ fn test_RawPngChunkIter_no_panics() {
 }
 
 #[test]
-#[cfg(all(feature = "alloc", feature = "miniz_oxide"))]
+#[cfg(all(feature = "png", feature = "alloc", feature = "miniz_oxide"))]
 fn test_pngs_do_not_panic_decoder() {
   // iter ALL files in the test folder, even non-png files shouldn't panic it.
 
