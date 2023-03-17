@@ -90,8 +90,9 @@
 use core::fmt::{Debug, Write};
 
 use bitfrob::u8_replicate_bits;
+use pixel_formats::{r8g8b8_Srgb, r8g8b8a8_Srgb};
 
-use crate::pixel_formats::{sRGBIntent, RGB888, RGBA8888};
+use crate::sRGBIntent;
 
 // TODO: CRC support for raw chunks is needed later to write PNG data.
 
@@ -214,7 +215,7 @@ impl<'b> TryFrom<PngRawChunk<'b>> for PngChunk<'b> {
         // this can fail, so use `return` to avoid the outer Ok()
         return IHDR::try_from(raw.data).map(PngChunk::IHDR).map_err(|_| raw);
       }
-      PngRawChunkType::PLTE => match bytemuck::try_cast_slice::<u8, RGB888>(raw.data) {
+      PngRawChunkType::PLTE => match bytemuck::try_cast_slice::<u8, [u8; 3]>(raw.data) {
         Ok(entries) => PngChunk::PLTE(PLTE::from(entries)),
         Err(_) => return Err(raw),
       },
@@ -503,11 +504,11 @@ impl TryFrom<PngChunk<'_>> for bKGD {
 /// If you want to have a paletted image with transparency then the transparency
 /// info goes in a separate transparency chunk.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct PLTE<'b>(&'b [RGB888]);
-impl<'b> From<&'b [RGB888]> for PLTE<'b> {
+pub struct PLTE<'b>(&'b [[u8; 3]]);
+impl<'b> From<&'b [[u8; 3]]> for PLTE<'b> {
   #[inline]
   #[must_use]
-  fn from(entries: &'b [RGB888]) -> Self {
+  fn from(entries: &'b [[u8; 3]]) -> Self {
     Self(entries)
   }
 }
@@ -530,8 +531,12 @@ impl Debug for PLTE<'_> {
 }
 impl<'b> PLTE<'b> {
   /// Gets the entries as a slice.
+  ///
+  /// The data is RGB, but the entries are sRGB or not depending on if the sRGB
+  /// chunk is present elsewhere in the image. If the entries are *not* sRGB
+  /// they're *probably* Unorm.
   #[inline]
-  pub fn entries(&self) -> &'b [RGB888] {
+  pub fn entries(&self) -> &'b [[u8; 3]] {
     self.0
   }
 }
@@ -632,10 +637,8 @@ pub fn png_get_srgb(bytes: &[u8]) -> Option<sRGBIntent> {
 }
 
 /// Gets the palette out of the PNG bytes.
-///
-/// Each `[u8;3]` in the palette is an `[r8, g8, b8]` color entry.
 #[inline]
-pub fn png_get_palette(bytes: &[u8]) -> Option<&[RGB888]> {
+pub fn png_get_palette(bytes: &[u8]) -> Option<&[[u8; 3]]> {
   PngRawChunkIter::new(bytes)
     .filter_map(|raw_chunk| {
       let png_chunk = PngChunk::try_from(raw_chunk).ok()?;
@@ -1173,7 +1176,7 @@ impl IHDR {
 #[cfg(all(feature = "alloc", feature = "miniz_oxide"))]
 impl<P> crate::image::Bitmap<P>
 where
-  P: From<RGBA8888> + Clone,
+  P: From<r8g8b8a8_Srgb> + Clone,
 {
   /// Attempts to make a [Bitmap](crate::image::Bitmap) from PNG bytes.
   ///
@@ -1226,9 +1229,9 @@ where
     let mut pixels: Vec<P> = Vec::new();
     pixels.try_reserve(pixel_count).ok()?;
     // ferris plz make this into a memset
-    pixels.resize(pixel_count, RGBA8888::default().into());
+    pixels.resize(pixel_count, r8g8b8a8_Srgb::default().into());
     let mut image = Self { width: ihdr.width, height: ihdr.height, pixels };
-    let plte: &[RGB888] = if ihdr.color_type == PngColorType::Index {
+    let plte: &[[u8; 3]] = if ihdr.color_type == PngColorType::Index {
       png_get_palette(bytes).unwrap_or(&[])
     } else {
       &[]
@@ -1259,7 +1262,7 @@ where
               Some([data[0] as u16, data[1] as u16, data[2] as u16])
             };
             let a = if trns_rgb == full { 0 } else { 255 };
-            *p = RGBA8888 { r, g, b, a }.into();
+            *p = r8g8b8a8_Srgb { r, g, b, a }.into();
           }
           PngColorType::RGBA => {
             let [r, g, b, a] = if ihdr.bit_depth == 16 {
@@ -1267,11 +1270,11 @@ where
             } else {
               [data[0], data[1], data[2], data[3]]
             };
-            *p = RGBA8888 { r, g, b, a }.into();
+            *p = r8g8b8a8_Srgb { r, g, b, a }.into();
           }
           PngColorType::YA => {
             let [y, a] = if ihdr.bit_depth == 16 { [data[0], data[2]] } else { [data[0], data[1]] };
-            *p = RGBA8888 { r: y, g: y, b: y, a }.into();
+            *p = r8g8b8a8_Srgb { r: y, g: y, b: y, a }.into();
           }
           PngColorType::Y => {
             let y = if ihdr.bit_depth == 16 {
@@ -1285,16 +1288,16 @@ where
               Some(data[0] as u16)
             };
             let a = if trns_y == full { 0 } else { 255 };
-            *p = RGBA8888 { r: y, g: y, b: y, a }.into();
+            *p = r8g8b8a8_Srgb { r: y, g: y, b: y, a }.into();
           }
           PngColorType::Index => {
-            let RGB888 { r, g, b } = *plte.get(data[0] as usize).unwrap_or(&RGB888::default());
+            let [r, g, b] = *plte.get(data[0] as usize).unwrap_or(&[0, 0, 0]);
             let a = if let Some(alphas) = trns_alphas {
               *alphas.get(data[0] as usize).unwrap_or(&255)
             } else {
               255
             };
-            *p = RGBA8888 { r, g, b, a }.into()
+            *p = r8g8b8a8_Srgb { r, g, b, a }.into()
           }
         }
       } else {
@@ -1309,7 +1312,7 @@ where
 }
 
 #[cfg(all(feature = "alloc", feature = "miniz_oxide"))]
-impl crate::image::Palmap<u8, RGBA8888> {
+impl crate::image::Palmap<u8, r8g8b8a8_Srgb> {
   /// Attempts to make a [Palmap](crate::image::Palmap) from PNG bytes.
   ///
   /// ## Failure
@@ -1364,8 +1367,10 @@ impl crate::image::Palmap<u8, RGBA8888> {
     indexes.try_reserve(pixel_count).ok()?;
     // ferris plz make this into a memset
     indexes.resize(pixel_count, 0_u8);
-    let mut palette: Vec<RGBA8888> = match png_get_palette(bytes) {
-      Some(pal_slice) => pal_slice.iter().map(|rgb| RGBA8888::from(*rgb)).collect(),
+    let mut palette: Vec<r8g8b8a8_Srgb> = match png_get_palette(bytes) {
+      Some(pal_slice) => {
+        pal_slice.iter().copied().map(|[r, g, b]| r8g8b8a8_Srgb { r, g, b, a: 0xFF }).collect()
+      }
       None => return None,
     };
     if let Some(tRNS(bytes)) = png_get_transparency(bytes) {

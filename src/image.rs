@@ -40,6 +40,7 @@ impl<P> Bitmap<P> {
       None
     }
   }
+
   /// Flips the image top to bottom.
   #[inline]
   pub fn vertical_flip(&mut self) {
@@ -77,6 +78,7 @@ impl<I, P> Palmap<I, P> {
       None
     }
   }
+
   /// Flips the image top to bottom.
   #[inline]
   pub fn vertical_flip(&mut self) {
@@ -105,7 +107,11 @@ where
       .indexes
       .iter()
       .cloned()
-      .map(|i| B::from(palmap.palette.get(usize::from(i)).cloned().unwrap_or_default()))
+      .map(|i| {
+        let pal_index = usize::from(i);
+        let color = palmap.palette.get(pal_index).cloned().unwrap_or_default();
+        B::from(color)
+      })
       .collect();
     Bitmap { width: palmap.width, height: palmap.height, pixels }
   }

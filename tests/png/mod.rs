@@ -1,4 +1,4 @@
-use imagine::{pixel_formats::RGBA8888, png::PngRawChunkIter};
+use imagine::png::PngRawChunkIter;
 use walkdir::WalkDir;
 
 #[test]
@@ -21,6 +21,7 @@ fn test_pngs_do_not_panic_decoder() {
   use std::ffi::OsStr;
 
   use imagine::image::Bitmap;
+  use pixel_formats::r8g8b8a8_Srgb;
   for entry in WalkDir::new("tests/").into_iter().filter_map(|e| e.ok()) {
     if entry.file_type().is_dir() {
       continue;
@@ -33,7 +34,7 @@ fn test_pngs_do_not_panic_decoder() {
         continue;
       }
     };
-    let image_result = Bitmap::<RGBA8888>::try_from_png_bytes(&v);
+    let image_result = Bitmap::<r8g8b8a8_Srgb>::try_from_png_bytes(&v);
     if entry.path().extension().and_then(OsStr::to_str).unwrap_or("") == "png"
       && !entry.path().file_name().and_then(OsStr::to_str).unwrap_or("").starts_with('x')
     {

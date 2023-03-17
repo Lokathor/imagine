@@ -16,7 +16,8 @@ use ezgl::{
   TextureTarget::*,
   TextureWrap,
 };
-use imagine::{image::Bitmap, pixel_formats::RGBA8888};
+use imagine::image::Bitmap;
+use pixel_formats::r8g8b8a8_Srgb;
 
 const USE_GLES: bool = cfg!(target_arch = "aarch64") || cfg!(target_arch = "arm");
 
@@ -71,11 +72,11 @@ fn main() {
   };
 
   // THIS IS THE COOL PART WHERE WE'RE USING THE LIBRARY TO PARSE A FILE
-  let mut image = match Bitmap::<RGBA8888>::try_from_png_bytes(&bytes) {
+  let mut image = match Bitmap::<r8g8b8a8_Srgb>::try_from_png_bytes(&bytes) {
     Some(image) => image,
-    None => match Bitmap::<RGBA8888>::try_from_bmp_bytes(&bytes).ok() {
+    None => match Bitmap::<r8g8b8a8_Srgb>::try_from_bmp_bytes(&bytes).ok() {
       Some(image) => image,
-      None => match Bitmap::<RGBA8888>::try_from_netpbm_bytes(&bytes).ok() {
+      None => match Bitmap::<r8g8b8a8_Srgb>::try_from_netpbm_bytes(&bytes).ok() {
         Some(image) => image,
         None => {
           println!("Couldn't parse the file.");
