@@ -8,16 +8,11 @@ use beryllium::{
 };
 use bytemuck::cast_slice;
 use ezgl::{
-  gl_constants::{GL_COLOR_BUFFER_BIT, GL_TRIANGLES, GL_UNSIGNED_INT},
-  BufferTarget::*,
-  BufferUsageHint::*,
-  EzGl, MagFilter, MinFilter,
-  ShaderType::*,
-  TextureTarget::*,
-  TextureWrap,
+  gl_constants::GL_COLOR_BUFFER_BIT, BufferTarget::*, BufferUsageHint::*, DrawMode, EzGl,
+  MagFilter, MinFilter, ShaderType::*, TextureTarget::*, TextureWrap,
 };
 use imagine::image::Bitmap;
-use pixel_formats::r8g8b8a8_Srgb;
+use pixel_formats::{r32g32b32a32_Sfloat, r8g8b8a8_Srgb};
 
 const USE_GLES: bool = cfg!(target_arch = "aarch64") || cfg!(target_arch = "arm");
 
@@ -157,11 +152,11 @@ fn main() {
 
   let vbo = gl.gen_buffer().unwrap();
   gl.bind_buffer(ArrayBuffer, &vbo);
-  gl.alloc_buffer_data(ArrayBuffer, cast_slice(vertices), StaticDraw);
+  gl.buffer_data(ArrayBuffer, cast_slice(vertices), StaticDraw);
 
   let ebo = gl.gen_buffer().unwrap();
   gl.bind_buffer(ElementArrayBuffer, &ebo);
-  gl.alloc_buffer_data(ElementArrayBuffer, cast_slice(indices), StaticDraw);
+  gl.buffer_data(ElementArrayBuffer, cast_slice(indices), StaticDraw);
 
   gl.enable_vertex_attrib_array(0);
   gl.vertex_attrib_f32_pointer::<[f32; 3]>(0, size_of::<Vertex>(), size_of::<[f32; 0]>());
@@ -201,32 +196,81 @@ fn main() {
   gl.bind_texture(Texture2D, &texture);
   gl.set_texture_wrap_s(Texture2D, TextureWrap::MirroredRepeat);
   gl.set_texture_wrap_t(Texture2D, TextureWrap::MirroredRepeat);
-  gl.set_texture_border_color(Texture2D, &[1.0, 1.0, 0.0, 1.0]);
+  let yellow = r32g32b32a32_Sfloat { r: 1.0, g: 1.0, b: 0.0, a: 1.0 };
+  gl.set_texture_border_color(Texture2D, &yellow);
   gl.set_texture_min_filter(Texture2D, MinFilter::LinearMipmapLinear);
   gl.set_texture_mag_filter(Texture2D, MagFilter::Linear);
-  gl.alloc_tex_image_2d(
+  gl.tex_image_2d(
     Texture2D,
     0,
     image.width.try_into().unwrap(),
     image.height.try_into().unwrap(),
-    cast_slice(&image.pixels),
+    cast_slice::<_, r8g8b8a8_Srgb>(&image.pixels),
   );
   gl.generate_mipmap(Texture2D);
 
   // program "main loop".
   'the_loop: loop {
+    let mut new_file = None;
     // Process events from this frame.
     #[allow(clippy::never_loop)]
     #[allow(clippy::single_match)]
     while let Some((event, _timestamp)) = sdl.poll_events() {
       match event {
         Event::Quit => break 'the_loop,
+        Event::WindowResized { win_id: _, width, height }
+        | Event::WindowSizeChanged { win_id: _, width, height } => {
+          gl.set_viewport(0, 0, width, height);
+        }
+        Event::DropFile { win_id: _, name } => {
+          new_file = Some(name);
+        }
         _ => (),
       }
     }
 
+    if let Some(filename) = new_file {
+      let path = std::path::Path::new(&filename);
+      print!("Reading `{}`... ", path.display());
+      match std::fs::read(path) {
+        Ok(bytes) => {
+          println!("got {} bytes.", bytes.len());
+          match Bitmap::<r8g8b8a8_Srgb>::try_from_png_bytes(&bytes)
+            .or_else(|| Bitmap::<r8g8b8a8_Srgb>::try_from_bmp_bytes(&bytes).ok())
+            .or_else(|| Bitmap::<r8g8b8a8_Srgb>::try_from_netpbm_bytes(&bytes).ok())
+          {
+            Some(new_image) => {
+              if new_image.width <= 1920 && new_image.height <= 1080 {
+                image = new_image;
+                image.vertical_flip();
+                win.set_title(&format!("{}", path.display()));
+                win.set_window_size(image.width as _, image.height as _);
+                println!("image is now ({}, {})", image.width, image.height);
+              } else {
+                println!("new_image too large: ({},{})", new_image.width, new_image.height);
+              }
+              gl.tex_image_2d(
+                Texture2D,
+                0,
+                image.width.try_into().unwrap(),
+                image.height.try_into().unwrap(),
+                cast_slice::<_, r8g8b8a8_Srgb>(&image.pixels),
+              );
+              gl.generate_mipmap(Texture2D);
+            }
+            None => {
+              println!("Couldn't parse the file.");
+            }
+          };
+        }
+        Err(e) => {
+          println!("{e:?}");
+        }
+      };
+    }
+
     gl.clear(GL_COLOR_BUFFER_BIT);
-    unsafe { gl.draw_elements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0) };
+    unsafe { gl.draw_elements::<u32>(DrawMode::Triangles, 0..6) };
 
     win.swap_window();
   }

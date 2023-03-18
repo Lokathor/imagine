@@ -27,8 +27,8 @@ wide = { version = "0.7.6", default-features = false, optional = true }
 getrandom = "0.2.7"
 walkdir = "2.3.2"
 image = "0.24.5"
-beryllium = "0.11.3"
-ezgl = "0.1.1"
+beryllium = "0.12.3"
+ezgl = "0.2.0"
 
 [package.metadata.docs.rs]
 rustdoc-args = ["--cfg","docs_rs"]
