@@ -10,7 +10,7 @@ categories = ["encoding", "no-std"]
 autoexamples = false
 
 [features]
-default = ["alloc", "png", "miniz_oxide", "bmp", "netpbm"]
+default = ["alloc", "miniz_oxide", "png", "bmp", "netpbm"]
 alloc = []
 png = [] # Portable Network Graphics
 bmp = [] # Windows Bitmap
