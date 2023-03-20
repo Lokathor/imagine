@@ -22,4 +22,17 @@ impl PLTE<'_> {
       &self.entries
     }
   }
+
+  #[inline]
+  #[must_use]
+  #[cfg(feature = "alloc")]
+  pub fn to_owned(&self) -> PLTE<'static> {
+    use alloc::borrow::ToOwned;
+    PLTE {
+      entries: alloc::borrow::Cow::Owned(self.entries.clone().into_owned()),
+      chunk_ty: self.chunk_ty,
+      crc_claim: self.crc_claim,
+      length: self.length,
+    }
+  }
 }

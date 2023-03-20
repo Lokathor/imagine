@@ -2,7 +2,7 @@ use super::*;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(C)]
-pub struct cHRM {
+pub struct fcTL {
   length: U32BE,
   chunk_ty: AsciiArray<4>,
   sequence_number: U32BE,

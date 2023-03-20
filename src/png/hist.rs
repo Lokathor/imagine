@@ -1,19 +1,19 @@
 use super::*;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct IDAT<'a> {
+pub struct hIST<'a> {
   length: U32BE,
   chunk_ty: AsciiArray<4>,
   #[cfg(not(feature = "alloc"))]
-  data: &'a [u8],
+  data: &'a [U16BE],
   #[cfg(feature = "alloc")]
-  data: alloc::borrow::Cow<'a, [u8]>,
+  data: alloc::borrow::Cow<'a, [U16BE]>,
   crc_claim: U32BE,
 }
-impl IDAT<'_> {
+impl hIST<'_> {
   #[inline]
   #[must_use]
-  pub fn data(&self) -> &[u8] {
+  pub fn data(&self) -> &[U16BE] {
     #[cfg(not(feature = "alloc"))]
     {
       self.data
@@ -27,9 +27,9 @@ impl IDAT<'_> {
   #[inline]
   #[must_use]
   #[cfg(feature = "alloc")]
-  pub fn to_owned(&self) -> IDAT<'static> {
+  pub fn to_owned(&self) -> hIST<'static> {
     use alloc::borrow::ToOwned;
-    IDAT {
+    hIST {
       data: alloc::borrow::Cow::Owned(self.data.clone().into_owned()),
       chunk_ty: self.chunk_ty,
       crc_claim: self.crc_claim,

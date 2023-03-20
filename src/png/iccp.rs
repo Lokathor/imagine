@@ -1,7 +1,7 @@
 use super::*;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct IDAT<'a> {
+pub struct iCCP<'a> {
   length: U32BE,
   chunk_ty: AsciiArray<4>,
   #[cfg(not(feature = "alloc"))]
@@ -10,7 +10,7 @@ pub struct IDAT<'a> {
   data: alloc::borrow::Cow<'a, [u8]>,
   crc_claim: U32BE,
 }
-impl IDAT<'_> {
+impl iCCP<'_> {
   #[inline]
   #[must_use]
   pub fn data(&self) -> &[u8] {
@@ -27,9 +27,9 @@ impl IDAT<'_> {
   #[inline]
   #[must_use]
   #[cfg(feature = "alloc")]
-  pub fn to_owned(&self) -> IDAT<'static> {
+  pub fn to_owned(&self) -> iCCP<'static> {
     use alloc::borrow::ToOwned;
-    IDAT {
+    iCCP {
       data: alloc::borrow::Cow::Owned(self.data.clone().into_owned()),
       chunk_ty: self.chunk_ty,
       crc_claim: self.crc_claim,

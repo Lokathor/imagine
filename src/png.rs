@@ -4,9 +4,9 @@
 
 //! Module for working with PNG data.
 //!
-//! * [Portable Network Graphics Specification (Second Edition)][png-spec]
+//! * [Portable Network Graphics (PNG) Specification (Third Edition)][png-spec]
 //!
-//! [png-spec]: https://www.w3.org/TR/2003/REC-PNG-20031110/
+//! [png-spec]: https://www.w3.org/TR/png/
 //!
 //! ## Library Design Assumptions
 //!
@@ -99,23 +99,32 @@ use core::fmt::{Debug, Write};
 use pixel_formats::{r8g8b8_Srgb, r8g8b8a8_Srgb};
 
 mod actl;
+mod bkgd;
 mod chrm;
+mod cicp;
 mod crc32;
 mod exif;
 mod fctl;
 mod fdat;
+mod gama;
+mod hist;
+mod iccp;
 mod idat;
 mod iend;
 mod ihdr;
 mod itxt;
 mod phys;
 mod plte;
+mod sbit;
 mod splt;
+mod srgb;
 mod text;
 mod time;
+mod trns;
 mod ztxt;
 
 pub use self::{
-  actl::*, chrm::*, crc32::*, exif::*, fctl::*, fdat::*, idat::*, iend::*, ihdr::*, itxt::*,
-  phys::*, plte::*, splt::*, text::*, time::*, ztxt::*,
+  actl::*, bkgd::*, chrm::*, cicp::*, crc32::*, exif::*, fctl::*, fdat::*, gama::*, hist::*,
+  iccp::*, idat::*, iend::*, ihdr::*, itxt::*, phys::*, plte::*, sbit::*, splt::*, srgb::*,
+  text::*, time::*, trns::*, ztxt::*,
 };
