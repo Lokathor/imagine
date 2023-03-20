@@ -128,3 +128,40 @@ pub use self::{
   iccp::*, idat::*, iend::*, ihdr::*, itxt::*, phys::*, plte::*, sbit::*, splt::*, srgb::*,
   text::*, time::*, trns::*, ztxt::*,
 };
+
+/// Checks if the PNG's initial 8 bytes are correct.
+///
+/// * If this is the case, the rest of the bytes are very likely PNG data.
+/// * If this is *not* the case, the rest of the bytes are very likely *not* PNG
+///   data.
+#[inline]
+pub const fn is_png_header_correct(bytes: &[u8]) -> bool {
+  matches!(bytes, [137, 80, 78, 71, 13, 10, 26, 10, ..])
+}
+
+#[derive(Debug, Clone)]
+pub enum PngChunk<'a> {
+  acTL(acTL),
+  bKGD(bKGD<'a>),
+  cHRM(cHRM),
+  cICP(cICP),
+  eXIf(eXIf<'a>),
+  fcTL(fcTL),
+  fdAT(fdAT),
+  gAMA(gAMA),
+  hIST(hIST<'a>),
+  iCCP(iCCP),
+  IDAT(IDAT<'a>),
+  IEND(IEND),
+  IHDR(IHDR),
+  iTXt(iTXt),
+  pHYs(pHYs),
+  PLTE(PLTE),
+  sBIT(sBIT),
+  sPLT(sPLT<'a>),
+  sRGB(sRGB),
+  tTXt(tTXt<'a>),
+  tIME(tIME),
+  tRNS(tRNS<'a>),
+  zTXt(zTXt<'a>),
+}
