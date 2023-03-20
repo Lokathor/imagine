@@ -5,8 +5,21 @@
 #![warn(missing_debug_implementations)]
 #![warn(clippy::missing_inline_in_public_items)]
 #![allow(clippy::get_first)]
+#![allow(clippy::assign_op_pattern)]
 
 //! A crate to work with image data.
+
+macro_rules! size_of {
+  ($t:ty) => {
+    core::mem::size_of::<$t>().try_into().unwrap()
+  };
+}
+
+mod ascii_array;
+mod int_endian;
+
+pub use ascii_array::*;
+pub use int_endian::*;
 
 #[cfg(feature = "alloc")]
 extern crate alloc;

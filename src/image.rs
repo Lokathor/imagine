@@ -94,23 +94,23 @@ impl<I, P> Palmap<I, P> {
   }
 }
 
-impl<I, P, B> From<&Palmap<I, P>> for Bitmap<B>
+impl<I, P, OutP> From<&Palmap<I, P>> for Bitmap<OutP>
 where
   usize: From<I>,
   I: Clone,
-  B: From<P>,
+  OutP: From<P>,
   P: Clone + Default,
 {
   #[inline]
   fn from(palmap: &Palmap<I, P>) -> Self {
-    let pixels: Vec<B> = palmap
+    let pixels: Vec<OutP> = palmap
       .indexes
       .iter()
       .cloned()
       .map(|i| {
         let pal_index = usize::from(i);
         let color = palmap.palette.get(pal_index).cloned().unwrap_or_default();
-        B::from(color)
+        OutP::from(color)
       })
       .collect();
     Bitmap { width: palmap.width, height: palmap.height, pixels }
