@@ -53,10 +53,7 @@
 //! * 24 bits per pixel is direct color and the channel order is always implied
 //!   to be `[b,g,r]` within `[u8; 3]`.
 
-use crate::{
-  image::{Bitmap, Palmap},
-  sRGBIntent, AsciiArray,
-};
+use crate::{sRGBIntent, AsciiArray};
 use bytemuck::cast;
 use core::{
   fmt::Write,
@@ -2185,7 +2182,8 @@ where
       BmpCompression::CmykRLE8 => return Err(BmpError::ParserIncomplete),
     }
 
-    let bitmap = Bitmap { height: height as u32, width: width as u32, pixels: final_storage };
+    let bitmap =
+      crate::image::Bitmap { height: height as u32, width: width as u32, pixels: final_storage };
     Ok(bitmap)
   }
 }
@@ -2273,7 +2271,8 @@ where
       v
     };
 
-    let mut palmap: Palmap<u8, P> = Palmap { width, height, indexes, palette };
+    let mut palmap: crate::image::Palmap<u8, P> =
+      crate::image::Palmap { width, height, indexes, palette };
 
     let pixel_data_start_index: usize = file_header.pixel_data_offset as usize;
     let pixel_data_end_index: usize = pixel_data_start_index + info_header.pixel_data_len();
