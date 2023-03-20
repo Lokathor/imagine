@@ -19,3 +19,5 @@ http://alvyray.com/Memos/CG/Microsoft/5_sprite.pdf
 https://shawnhargreaves.com/blogindex.html#premultipliedalpha
 
 https://www.realtimerendering.com/blog/gpus-prefer-premultiplication/
+
+https://optipng.sourceforge.net/pngtech/links/corpora.html
