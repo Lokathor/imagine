@@ -34,10 +34,10 @@ ezgl = "0.2.0"
 rustdoc-args = ["--cfg","docs_rs"]
 all-features = true
 
-[[example]]
-name = "png_chunk_print"
-required-features = ["png"]
+#[[example]]
+#name = "png_chunk_print"
+#required-features = ["png"]
 
-[[example]]
-name = "viewer"
-required-features = ["alloc", "png", "miniz_oxide", "bmp"]
+#[[example]]
+#name = "viewer"
+#required-features = ["alloc", "png", "miniz_oxide", "bmp"]
