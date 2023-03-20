@@ -1,6 +1,9 @@
 use super::*;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+/// Image data
+///
+/// Spec: [IDAT](https://www.w3.org/TR/png/#11IDAT)
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct IDAT<'a> {
   length: U32BE,
   chunk_ty: AsciiArray<4>,
@@ -11,6 +14,7 @@ pub struct IDAT<'a> {
   crc_claim: U32BE,
 }
 impl IDAT<'_> {
+  /// the image data (one chunk of possibly several)
   #[inline]
   #[must_use]
   pub fn data(&self) -> &[u8] {
@@ -24,6 +28,7 @@ impl IDAT<'_> {
     }
   }
 
+  /// Clone the data into a new, owned value.
   #[inline]
   #[must_use]
   #[cfg(feature = "alloc")]

@@ -1,6 +1,9 @@
 use super::*;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+/// Suggested palette
+///
+/// Spec: [sPLT](https://www.w3.org/TR/png/#11sPLT)
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct sPLT<'a> {
   length: U32BE,
   chunk_ty: AsciiArray<4>,
@@ -11,6 +14,9 @@ pub struct sPLT<'a> {
   crc_claim: U32BE,
 }
 impl sPLT<'_> {
+  /// Suggested palette data, with a small header and then a series of chunks.
+  /// Each chunk is either six or ten bytes, depending on the bit depth of the
+  /// RGBA channels (1 byte each or 2 bytes each).
   #[inline]
   #[must_use]
   pub fn data(&self) -> &[u8] {
@@ -24,6 +30,7 @@ impl sPLT<'_> {
     }
   }
 
+  /// Clone the data into a new, owned value.
   #[inline]
   #[must_use]
   #[cfg(feature = "alloc")]

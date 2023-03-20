@@ -1,6 +1,9 @@
 use super::*;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Animation Control Chunk
+///
+/// Spec: [acTL](https://www.w3.org/TR/png/#acTL-chunk)
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(C)]
 pub struct acTL {
   length: U32BE,

@@ -1,6 +1,9 @@
 use super::*;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Coding-independent code points for video signal type identification
+///
+/// Spec: [cICP](https://www.w3.org/TR/png/#cICP-chunk)
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(C)]
 pub struct cICP {
   length: U32BE,

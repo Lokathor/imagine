@@ -1,6 +1,9 @@
 use super::*;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+/// Textual data
+///
+/// Spec: [tTXt](https://www.w3.org/TR/png/#11tEXt)
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct tTXt<'a> {
   length: U32BE,
   chunk_ty: AsciiArray<4>,
@@ -11,6 +14,8 @@ pub struct tTXt<'a> {
   crc_claim: U32BE,
 }
 impl tTXt<'_> {
+  /// Text key/val pair, Latin-1 encoded. A single null byte separates the two.
+  /// Normally the keyword length should be 1-79 bytes.
   #[inline]
   #[must_use]
   pub fn data(&self) -> &[u8] {
@@ -24,6 +29,7 @@ impl tTXt<'_> {
     }
   }
 
+  /// Clone the data into a new, owned value.
   #[inline]
   #[must_use]
   #[cfg(feature = "alloc")]

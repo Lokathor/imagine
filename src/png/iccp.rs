@@ -1,6 +1,9 @@
 use super::*;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+/// Embedded ICC profile
+///
+/// Spec: [iCCP](https://www.w3.org/TR/png/#11iCCP)
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct iCCP<'a> {
   length: U32BE,
   chunk_ty: AsciiArray<4>,
@@ -11,6 +14,7 @@ pub struct iCCP<'a> {
   crc_claim: U32BE,
 }
 impl iCCP<'_> {
+  /// color profile data
   #[inline]
   #[must_use]
   pub fn data(&self) -> &[u8] {
@@ -24,6 +28,7 @@ impl iCCP<'_> {
     }
   }
 
+  /// Clone the data into a new, owned value.
   #[inline]
   #[must_use]
   #[cfg(feature = "alloc")]

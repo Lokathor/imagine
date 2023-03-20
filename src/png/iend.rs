@@ -1,6 +1,9 @@
 use super::*;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Image Trailer
+///
+/// Spec: [IEND](https://www.w3.org/TR/png/#11IEND)
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(C)]
 pub struct IEND {
   length: U32BE,
@@ -21,9 +24,10 @@ impl Default for IEND {
   }
 }
 impl IEND {
+  ///
   #[inline]
   #[must_use]
-  pub fn compute_crc(&self) -> u32 {
+  fn compute_crc(&self) -> u32 {
     png_crc(self.chunk_ty.as_bytes().iter().copied())
   }
 }

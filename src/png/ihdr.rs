@@ -1,6 +1,9 @@
 use super::*;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Image header
+///
+/// Spec: [IHDR](https://www.w3.org/TR/png/#11IHDR)
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(C)]
 pub struct IHDR {
   length: U32BE,

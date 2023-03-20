@@ -1,6 +1,9 @@
 use super::*;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+/// Image histogram
+///
+/// Spec: [hIST](https://www.w3.org/TR/png/#11hIST)
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct hIST<'a> {
   length: U32BE,
   chunk_ty: AsciiArray<4>,
@@ -11,6 +14,7 @@ pub struct hIST<'a> {
   crc_claim: U32BE,
 }
 impl hIST<'_> {
+  /// histogram data
   #[inline]
   #[must_use]
   pub fn data(&self) -> &[U16BE] {
@@ -24,6 +28,7 @@ impl hIST<'_> {
     }
   }
 
+  /// Clone the data into a new, owned value.
   #[inline]
   #[must_use]
   #[cfg(feature = "alloc")]

@@ -1,6 +1,9 @@
 use super::*;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Frame Control Chunk
+///
+/// Spec: [fcTL](https://www.w3.org/TR/png/#fcTL-chunk)
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(C)]
 pub struct fcTL {
   length: U32BE,

@@ -1,6 +1,9 @@
 use super::*;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+/// Transparency
+///
+/// Spec: [tRNS](https://www.w3.org/TR/png/#11tRNS)
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct tRNS<'a> {
   length: U32BE,
   chunk_ty: AsciiArray<4>,
@@ -11,6 +14,12 @@ pub struct tRNS<'a> {
   crc_claim: U32BE,
 }
 impl tRNS<'_> {
+  /// Transparency data. Format depends on the PNG color type:
+  /// * greyscale: [`U16BE`]
+  /// * RGB: `[U16BE; 3]`
+  /// * indexed: `&[u8]` of alpha data that should be paired with the palette
+  ///   entries. There can be less alpha entries than palette entries (default
+  ///   missing entries to full opacity, `0xFF`)
   #[inline]
   #[must_use]
   pub fn data(&self) -> &[u8] {
@@ -24,6 +33,7 @@ impl tRNS<'_> {
     }
   }
 
+  /// Clone the data into a new, owned value.
   #[inline]
   #[must_use]
   #[cfg(feature = "alloc")]

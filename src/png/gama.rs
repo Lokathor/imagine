@@ -1,6 +1,9 @@
 use super::*;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Image gamma
+///
+/// Spec: [gAMA](https://www.w3.org/TR/png/#11gAMA)
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(C)]
 pub struct gAMA {
   length: U32BE,

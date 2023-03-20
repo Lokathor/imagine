@@ -1,6 +1,9 @@
 use super::*;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+/// Compressed textual data
+///
+/// Spec: [zTXt](https://www.w3.org/TR/png/#11zTXt)
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct zTXt<'a> {
   length: U32BE,
   chunk_ty: AsciiArray<4>,
@@ -11,6 +14,11 @@ pub struct zTXt<'a> {
   crc_claim: U32BE,
 }
 impl zTXt<'_> {
+  /// Chunk data.
+  /// * keyword (should be 1-79 bytes)
+  /// * null byte
+  /// * compression method (only defined for zlib compression)
+  /// * zlib compressed data stream
   #[inline]
   #[must_use]
   pub fn data(&self) -> &[u8] {
@@ -24,6 +32,7 @@ impl zTXt<'_> {
     }
   }
 
+  /// Clone the data into a new, owned value.
   #[inline]
   #[must_use]
   #[cfg(feature = "alloc")]

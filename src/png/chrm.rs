@@ -1,6 +1,9 @@
 use super::*;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Primary chromaticities and white point
+///
+/// Spec: [cHRM](https://www.w3.org/TR/png/#11cHRM)
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(C)]
 pub struct cHRM {
   length: U32BE,

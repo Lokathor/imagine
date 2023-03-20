@@ -1,6 +1,9 @@
 use super::*;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+/// International textual data
+///
+/// Spec: [iTXt](https://www.w3.org/TR/png/#11iTXt)
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct iTXt<'a> {
   length: U32BE,
   chunk_ty: AsciiArray<4>,
@@ -11,6 +14,7 @@ pub struct iTXt<'a> {
   crc_claim: U32BE,
 }
 impl iTXt<'_> {
+  /// chunk data
   #[inline]
   #[must_use]
   pub fn data(&self) -> &[u8] {
@@ -24,6 +28,7 @@ impl iTXt<'_> {
     }
   }
 
+  /// Clone the data into a new, owned value.
   #[inline]
   #[must_use]
   #[cfg(feature = "alloc")]

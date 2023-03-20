@@ -1,6 +1,9 @@
 use super::*;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Image last-modification time
+///
+/// Spec: [tIME](https://www.w3.org/TR/png/#11tIME)
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(C)]
 pub struct tIME {
   length: U32BE,

@@ -1,6 +1,9 @@
 use super::*;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+/// Frame Data Chunk
+///
+/// Spec: [fdAT](https://www.w3.org/TR/png/#fdAT-chunk)
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct fdAT<'a> {
   length: U32BE,
   chunk_ty: AsciiArray<4>,
@@ -12,6 +15,7 @@ pub struct fdAT<'a> {
   crc_claim: U32BE,
 }
 impl fdAT<'_> {
+  /// frame data
   #[inline]
   #[must_use]
   pub fn data(&self) -> &[u8] {
@@ -25,6 +29,7 @@ impl fdAT<'_> {
     }
   }
 
+  /// Clone the data into a new, owned value.
   #[inline]
   #[must_use]
   #[cfg(feature = "alloc")]

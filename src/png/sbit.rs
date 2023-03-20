@@ -1,6 +1,9 @@
 use super::*;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+/// Significant bits
+///
+/// Spec: [sBIT](https://www.w3.org/TR/png/#11sBIT)
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct sBIT<'a> {
   length: U32BE,
   chunk_ty: AsciiArray<4>,
@@ -11,6 +14,12 @@ pub struct sBIT<'a> {
   crc_claim: U32BE,
 }
 impl sBIT<'_> {
+  /// Chunk data. There's one byte per channel (according to the PNG's pixel
+  /// format), giving the number of significant bits for each channel:
+  /// * grayscale
+  /// * RGB
+  /// * grayscale + alpha
+  /// * RGBA
   #[inline]
   #[must_use]
   pub fn data(&self) -> &[u8] {
@@ -24,6 +33,7 @@ impl sBIT<'_> {
     }
   }
 
+  /// Clone the data into a new, owned value.
   #[inline]
   #[must_use]
   #[cfg(feature = "alloc")]

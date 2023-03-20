@@ -1,6 +1,9 @@
 use super::*;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Standard RGB colour space
+///
+/// Spec: [sRGB](https://www.w3.org/TR/png/#11sRGB)
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(C)]
 pub struct sRGB {
   length: U32BE,

@@ -1,6 +1,5 @@
 #![forbid(unsafe_code)]
 #![allow(nonstandard_style)]
-#![allow(missing_docs)]
 
 //! Module for working with PNG data.
 //!
@@ -139,7 +138,9 @@ pub const fn is_png_header_correct(bytes: &[u8]) -> bool {
   matches!(bytes, [137, 80, 78, 71, 13, 10, 26, 10, ..])
 }
 
-#[derive(Debug, Clone)]
+/// Enum for all the PNG chunk variations described in the spec.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[allow(missing_docs)]
 pub enum PngChunk<'a> {
   acTL(acTL),
   bKGD(bKGD<'a>),
@@ -147,21 +148,76 @@ pub enum PngChunk<'a> {
   cICP(cICP),
   eXIf(eXIf<'a>),
   fcTL(fcTL),
-  fdAT(fdAT),
+  fdAT(fdAT<'a>),
   gAMA(gAMA),
   hIST(hIST<'a>),
-  iCCP(iCCP),
+  iCCP(iCCP<'a>),
   IDAT(IDAT<'a>),
   IEND(IEND),
   IHDR(IHDR),
-  iTXt(iTXt),
+  iTXt(iTXt<'a>),
   pHYs(pHYs),
-  PLTE(PLTE),
-  sBIT(sBIT),
+  PLTE(PLTE<'a>),
+  sBIT(sBIT<'a>),
   sPLT(sPLT<'a>),
   sRGB(sRGB),
   tTXt(tTXt<'a>),
   tIME(tIME),
   tRNS(tRNS<'a>),
   zTXt(zTXt<'a>),
+  // TODO: chunk variant for "unknown"?
+}
+impl PngChunk<'_> {
+  /// This partial compares self to other.
+  ///
+  /// The *actual* PartialCmp impl will call this again with reverses arguments
+  /// if the first call gives `None`. But we don't want infinite recursion so we
+  /// need to separate just the match itself from the flipping logic.
+  const fn forward_cmp(&self, other: &Self) -> Option<core::cmp::Ordering> {
+    use core::cmp::Ordering;
+    use PngChunk::*;
+    match self {
+      // must be first
+      IHDR(_) => Some(Ordering::Less),
+      // before plte and idat
+      acTL(_) | cHRM(_) | cICP(_) | gAMA(_) | iCCP(_) | sBIT(_) | sRGB(_) => match other {
+        PLTE(_) | IDAT(_) => Some(Ordering::Less),
+        _ => None,
+      },
+      // after plte but before idat
+      bKGD(_) | hIST(_) | tRNS(_) => match other {
+        PLTE(_) => Some(Ordering::Greater),
+        IDAT(_) => Some(Ordering::Less),
+        _ => None,
+      },
+      // must be before idat
+      PLTE(_) | eXIf(_) | pHYs(_) | sPLT(_) => match other {
+        IDAT(_) => Some(Ordering::Less),
+        _ => None,
+      },
+      // after idat
+      fcTL(_) | fdAT(_) => match other {
+        IDAT(_) => Some(Ordering::Greater),
+        _ => None,
+      },
+      // must be last
+      IEND(_) => Some(Ordering::Greater),
+      _ => None,
+    }
+  }
+}
+impl core::cmp::PartialOrd for PngChunk<'_> {
+  #[inline]
+  #[must_use]
+  fn partial_cmp(&self, other: &Self) -> Option<core::cmp::Ordering> {
+    use core::cmp::Ordering;
+    // if the "forward" match didn't get a hit, also check the other direction
+    // and reverse anything it says (if it says something).
+    self.forward_cmp(other).or_else(|| other.forward_cmp(self).map(Ordering::reverse))
+  }
+}
+
+trait PngChunkCrc {
+  fn get_crc_claim() -> u32;
+  fn compute_actual_crc() -> u32;
 }

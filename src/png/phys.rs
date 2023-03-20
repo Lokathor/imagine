@@ -1,6 +1,9 @@
 use super::*;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Physical pixel dimensions
+///
+/// Spec: [pHYs](https://www.w3.org/TR/png/#11pHYs)
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(C)]
 pub struct pHYs {
   length: U32BE,
