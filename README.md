@@ -3,7 +3,9 @@
 
 # `imagine`
 
-* Can parse PNG files
+* `png`
+* `bmp`
+* `netpbm`
 
 ## License
 
