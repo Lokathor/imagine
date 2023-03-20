@@ -1,5 +1,5 @@
 
-* **[Latest Docs.rs](https://docs.rs/imagine/)**
+# [Docs.rs](https://docs.rs/imagine/)
 
 # `imagine`
 
