@@ -10,7 +10,7 @@ categories = ["encoding", "no-std"]
 autoexamples = false
 
 [features]
-default = ["alloc", "png", "miniz_oxide", "bmp", "netpbm"]
+default = ["alloc", "miniz_oxide", "png", "bmp", "netpbm"]
 alloc = []
 png = [] # Portable Network Graphics
 bmp = [] # Windows Bitmap
@@ -26,8 +26,8 @@ wide = { version = "0.7.8", default-features = false, optional = true }
 [dev-dependencies]
 getrandom = "0.2.7"
 walkdir = "2.3.2"
-pixels = "0.9"
-winit = "0.26"
+beryllium = "0.12.3"
+ezgl = "0.2.0"
 
 [package.metadata.docs.rs]
 rustdoc-args = ["--cfg","docs_rs"]
@@ -38,5 +38,5 @@ name = "png_chunk_print"
 required-features = ["png"]
 
 [[example]]
-name = "imagine_viewer"
-required-features = ["alloc", "png", "miniz_oxide", "bmp"]
+name = "viewer"
+required-features = ["alloc", "png", "miniz_oxide", "bmp", "netpbm"]
