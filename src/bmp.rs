@@ -131,11 +131,9 @@ pub enum BmpError {
 }
 
 use bytemuck::cast;
+use pixel_formats::r8g8b8a8_Unorm;
 
-use crate::{
-  image::{Bitmap, Palmap},
-  pixel_formats::{sRGBIntent, RGBA8888},
-};
+use crate::sRGBIntent;
 
 #[inline]
 #[must_use]
@@ -1724,7 +1722,7 @@ impl BmpInfoHeaderV5 {
 #[cfg(feature = "alloc")]
 impl<P> crate::image::Bitmap<P>
 where
-  P: From<RGBA8888> + Clone,
+  P: From<r8g8b8a8_Unorm> + Clone,
 {
   /// Attempts to parse the bytes of a BMP file into a bitmap.
   ///
@@ -1794,12 +1792,16 @@ where
     final_storage.try_reserve(pixel_count).map_err(|_| BmpError::AllocError)?;
     final_storage.resize(
       pixel_count,
-      (if a_mask != 0 { RGBA8888::default() } else { RGBA8888 { r: 0, g: 0, b: 0, a: 0xFF } })
-        .into(),
+      (if a_mask != 0 {
+        r8g8b8a8_Unorm::default()
+      } else {
+        r8g8b8a8_Unorm { r: 0, g: 0, b: 0, a: 0xFF }
+      })
+      .into(),
     );
 
     #[allow(unused_assignments)]
-    let palette: Vec<RGBA8888> = match info_header.palette_len() {
+    let palette: Vec<r8g8b8a8_Unorm> = match info_header.palette_len() {
       0 => Vec::new(),
       count => {
         let mut v = Vec::new();
@@ -1815,7 +1817,7 @@ where
             rest = new_rest;
             let pal_slice: &[[u8; 3]] = cast_slice(pal_slice);
             for [b, g, r] in pal_slice.iter().copied() {
-              v.push(RGBA8888 { r, g, b, a: 0xFF });
+              v.push(r8g8b8a8_Unorm { r, g, b, a: 0xFF });
             }
           }
           _ => {
@@ -1828,7 +1830,7 @@ where
             rest = new_rest;
             let pal_slice: &[[u8; 4]] = cast_slice(pal_slice);
             for [b, g, r, a] in pal_slice.iter().copied() {
-              v.push(RGBA8888 { r, g, b, a });
+              v.push(r8g8b8a8_Unorm { r, g, b, a });
             }
             if v.iter().copied().all(|c| c.a == 0) {
               v.iter_mut().for_each(|c| c.a = 0xFF);
@@ -1924,7 +1926,7 @@ where
                     .copied()
                     .enumerate()
                 {
-                  let p: P = RGBA8888 { r, g, b, a: 0xFF }.into();
+                  let p: P = r8g8b8a8_Unorm { r, g, b, a: 0xFF }.into();
                   final_storage[y * width + x] = p;
                 }
               }
@@ -1959,7 +1961,7 @@ where
                   let g: u8 = if g_mask != 0 { ((((u & g_mask) >> g_shift) as f32 / g_max) * 255.0) as u8 } else { 0 };
                   let b: u8 = if b_mask != 0 { ((((u & b_mask) >> b_shift) as f32 / b_max) * 255.0) as u8 } else { 0 };
                   let a: u8 = if a_mask != 0 { ((((u & a_mask) >> a_shift) as f32 / a_max) * 255.0) as u8 } else { 0xFF };
-                  let p: P = RGBA8888 { r, g, b, a }.into();
+                  let p: P = r8g8b8a8_Unorm { r, g, b, a }.into();
                   final_storage[y * width + x] = p;
                 }
               }
@@ -1994,7 +1996,7 @@ where
                   let g: u8 = if g_mask != 0 { ((((u & g_mask) >> g_shift) as f32 / g_max) * 255.0) as u8 } else { 0 };
                   let b: u8 = if b_mask != 0 { ((((u & b_mask) >> b_shift) as f32 / b_max) * 255.0) as u8 } else { 0 };
                   let a: u8 = if a_mask != 0 { ((((u & a_mask) >> a_shift) as f32 / a_max) * 255.0) as u8 } else { 0xFF };
-                  let p: P = RGBA8888 { r, g, b, a }.into();
+                  let p: P = r8g8b8a8_Unorm { r, g, b, a }.into();
                   final_storage[y * width + x] = p;
                 }
               }
@@ -2235,7 +2237,8 @@ where
       BmpCompression::CmykRLE8 => return Err(BmpError::ParserIncomplete),
     }
 
-    let bitmap = Bitmap { height: height as u32, width: width as u32, pixels: final_storage };
+    let bitmap =
+      crate::image::Bitmap { height: height as u32, width: width as u32, pixels: final_storage };
     Ok(bitmap)
   }
 }
@@ -2243,7 +2246,7 @@ where
 #[cfg(feature = "alloc")]
 impl<P> crate::image::Palmap<u8, P>
 where
-  P: From<RGBA8888> + Clone,
+  P: From<r8g8b8a8_Unorm> + Clone,
 {
   /// Attempts to make a [Palmap](crate::image::Palmap) from BMP bytes.
   ///
@@ -2254,6 +2257,7 @@ where
   #[cfg_attr(docs_rs, doc(cfg(all(feature = "bmp", feature = "miniz_oxide"))))]
   #[allow(clippy::missing_inline_in_public_items)]
   pub fn try_from_bmp_bytes(bytes: &[u8]) -> Result<Self, BmpError> {
+    use crate::image::Palmap;
     use alloc::vec::Vec;
     use bytemuck::cast_slice;
     use core::mem::size_of;
@@ -2275,7 +2279,7 @@ where
     let palette: Vec<P> = match info_header.palette_len() {
       0 => Vec::new(),
       pal_count => {
-        let mut v: Vec<RGBA8888> = Vec::new();
+        let mut v: Vec<r8g8b8a8_Unorm> = Vec::new();
         v.try_reserve(pal_count).map_err(|_| BmpError::AllocError)?;
         match info_header {
           BmpInfoHeader::Core(_) => {
@@ -2288,7 +2292,7 @@ where
             rest = new_rest;
             let pal_slice: &[[u8; 3]] = cast_slice(pal_slice);
             for [b, g, r] in pal_slice.iter().copied() {
-              v.push(RGBA8888 { r, g, b, a: 0xFF });
+              v.push(r8g8b8a8_Unorm { r, g, b, a: 0xFF });
             }
           }
           _ => {
@@ -2301,7 +2305,7 @@ where
             rest = new_rest;
             let pal_slice: &[[u8; 4]] = cast_slice(pal_slice);
             for [b, g, r, a] in pal_slice.iter().copied() {
-              v.push(RGBA8888 { r, g, b, a });
+              v.push(r8g8b8a8_Unorm { r, g, b, a });
             }
             if v.iter().copied().all(|c| c.a == 0) {
               v.iter_mut().for_each(|c| c.a = 0xFF);
