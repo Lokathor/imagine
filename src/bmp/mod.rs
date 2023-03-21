@@ -53,10 +53,13 @@
 //! * 24 bits per pixel is direct color and the channel order is always implied
 //!   to be `[b,g,r]` within `[u8; 3]`.
 
+use crate::sRGBIntent;
+use bytemuck::cast;
 use core::{
   fmt::Write,
   num::{NonZeroU16, NonZeroU32},
 };
+use pixel_formats::r8g8b8a8_Unorm;
 
 /// An array of bytes expected to contain ascii data.
 ///
@@ -73,7 +76,6 @@ use core::{
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[repr(transparent)]
 pub struct AsciiArray<const N: usize>(pub [u8; N]);
-
 impl<const N: usize> Default for AsciiArray<N> {
   #[inline]
   #[must_use]
@@ -81,7 +83,6 @@ impl<const N: usize> Default for AsciiArray<N> {
     Self([0_u8; N])
   }
 }
-
 impl<const N: usize> core::fmt::Debug for AsciiArray<N> {
   #[inline]
   fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
@@ -102,7 +103,6 @@ impl<const N: usize> core::fmt::Display for AsciiArray<N> {
     Ok(())
   }
 }
-
 impl<const N: usize> From<[u8; N]> for AsciiArray<N> {
   #[inline]
   #[must_use]
@@ -129,11 +129,6 @@ pub enum BmpError {
   /// know how to parse it.
   ParserIncomplete,
 }
-
-use bytemuck::cast;
-use pixel_formats::r8g8b8a8_Unorm;
-
-use crate::sRGBIntent;
 
 #[inline]
 #[must_use]
