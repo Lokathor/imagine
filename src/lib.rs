@@ -5,24 +5,13 @@
 #![warn(missing_debug_implementations)]
 #![warn(clippy::missing_inline_in_public_items)]
 #![allow(clippy::get_first)]
-#![allow(clippy::assign_op_pattern)]
 
 //! A crate to work with image data.
 
-macro_rules! size_of {
-  ($t:ty) => {
-    core::mem::size_of::<$t>().try_into().unwrap()
-  };
-}
-
-mod ascii_array;
-mod int_endian;
-
-pub use ascii_array::*;
-pub use int_endian::*;
-
 #[cfg(feature = "alloc")]
 extern crate alloc;
+
+pub mod pixel_formats;
 
 #[cfg(feature = "alloc")]
 #[cfg_attr(docs_rs, doc(cfg(feature = "alloc")))]
@@ -40,17 +29,3 @@ pub mod bmp;
 #[cfg_attr(docs_rs, doc(cfg(feature = "netpbm")))]
 #[allow(missing_docs)]
 pub mod netpbm;
-
-/// sRGB Intent for an image.
-///
-/// Unless you're able to color correct, the exact value doesn't really matter.
-/// However, knowing that image data is sRGB or not *at all* can be helpful.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-#[allow(nonstandard_style)]
-#[allow(missing_docs)]
-pub enum sRGBIntent {
-  Perceptual,
-  RelativeColorimetric,
-  Saturation,
-  AbsoluteColorimetric,
-}

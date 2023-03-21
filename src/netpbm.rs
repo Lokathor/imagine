@@ -22,9 +22,7 @@
 //! * There are also 1-bit-per-pixel images, but since they are always either
 //!   the minimum value they're effectively color space independent.
 
-use pixel_formats::r8g8b8a8_Srgb;
-
-use crate::image::Bitmap;
+use crate::{image::Bitmap, pixel_formats::RGBA8888};
 
 /// Parses for a netpbm header, along with the pixel data.
 ///
@@ -515,7 +513,7 @@ impl<'b> core::iter::Iterator for NetpbmAsciiU8Iter<'b> {
 #[cfg(feature = "alloc")]
 impl<P> crate::image::Bitmap<P>
 where
-  P: From<r8g8b8a8_Srgb> + Clone,
+  P: From<RGBA8888> + Clone,
 {
   #[allow(clippy::missing_inline_in_public_items)]
   pub fn try_from_netpbm_bytes(netpbm: &[u8]) -> Result<Self, NetpbmError> {
@@ -550,13 +548,11 @@ where
     let mut image: Vec<P> = Vec::new();
     image.try_reserve(pixel_count)?;
     //
-    let black = r8g8b8a8_Srgb { r: 0, g: 0, b: 0, a: 0xFF };
-    let white = r8g8b8a8_Srgb { r: 0xFF, g: 0xFF, b: 0xFF, a: 0xFF };
     match header.data_format {
       NetpbmDataFormat::Ascii_Y_1bpp => {
         NetpbmAscii1bppIter::new(pixel_data)
           .filter_map(|r| r.ok())
-          .map(|b| if b { black } else { white })
+          .map(|b| if b { RGBA8888::BLACK } else { RGBA8888::WHITE })
           .take(pixel_count)
           .for_each(|color| image.push(color.into()));
       }
@@ -565,7 +561,7 @@ where
         NetpbmAsciiU8Iter::new(pixel_data)
           .filter_map(|r| r.ok())
           .take(pixel_count)
-          .for_each(|y| image.push(r8g8b8a8_Srgb { r: y, g: y, b: y, a: 255 }.into()));
+          .for_each(|y| image.push(RGBA8888 { r: y, g: y, b: y, a: 255 }.into()));
       }
       NetpbmDataFormat::Ascii_Y_U8 { max } => {
         let channel_max = i32x4::from(u8::MAX as i32).round_float();
@@ -583,7 +579,7 @@ where
           let y_scaled_u: u32x4 = cast(y_scaled_f.round_int());
           // little endian, so bytes are packed into lanes as BGRA
           let rgba_x4 = a_x4 | (y_scaled_u << 16) | (y_scaled_u << 8) | y_scaled_u /* << 0 */;
-          let rgba_array: [r8g8b8a8_Srgb; 4] = cast(rgba_x4);
+          let rgba_array: [RGBA8888; 4] = cast(rgba_x4);
           rgba_array.iter().copied().take(pixels_remaining).for_each(|p| image.push(p.into()));
           pixels_remaining = pixels_remaining.saturating_sub(4);
         }
@@ -606,7 +602,7 @@ where
           let y_scaled_u: u32x4 = cast(y_scaled_f.round_int());
           // little endian, so bytes are packed into lanes as BGRA
           let rgba_x4 = a_x4 | (y_scaled_u << 16_u32) | (y_scaled_u << 8_u32) | y_scaled_u /* << 0 */;
-          let rgba_array: [r8g8b8a8_Srgb; 4] = cast(rgba_x4);
+          let rgba_array: [RGBA8888; 4] = cast(rgba_x4);
           rgba_array.iter().copied().take(pixels_remaining).for_each(|p| image.push(p.into()));
           pixels_remaining = pixels_remaining.saturating_sub(4);
         }
@@ -624,8 +620,7 @@ where
             i32x4::from([r_raw as i32, g_raw as i32, b_raw as i32, a_raw as i32]).round_float();
           let rgba_scaled_f = (rgba_raw / image_max) * channel_max;
           let [r32, g32, b32, a32]: [u32; 4] = cast(rgba_scaled_f.round_int());
-          image
-            .push(r8g8b8a8_Srgb { r: r32 as u8, g: g32 as u8, b: b32 as u8, a: a32 as u8 }.into());
+          image.push(RGBA8888 { r: r32 as u8, g: g32 as u8, b: b32 as u8, a: a32 as u8 }.into());
         }
       }
       NetpbmDataFormat::Ascii_RGB_U16 { max } => {
@@ -641,15 +636,12 @@ where
             i32x4::from([r_raw as i32, g_raw as i32, b_raw as i32, a_raw as i32]).round_float();
           let rgba_scaled_f = (rgba_raw / image_max) * channel_max;
           let [r32, g32, b32, a32]: [u32; 4] = cast(rgba_scaled_f.round_int());
-          image
-            .push(r8g8b8a8_Srgb { r: r32 as u8, g: g32 as u8, b: b32 as u8, a: a32 as u8 }.into());
+          image.push(RGBA8888 { r: r32 as u8, g: g32 as u8, b: b32 as u8, a: a32 as u8 }.into());
         }
       }
       NetpbmDataFormat::Binary_Y_1bpp => {
-        let black = r8g8b8a8_Srgb { r: 0, g: 0, b: 0, a: 0xFF };
-        let white = r8g8b8a8_Srgb { r: 0xFF, g: 0xFF, b: 0xFF, a: 0xFF };
         iter_1bpp_high_to_low(pixel_data)
-          .map(|b| if b { black } else { white })
+          .map(|b| if b { RGBA8888::BLACK } else { RGBA8888::WHITE })
           .take(pixel_count)
           .for_each(|color| image.push(color.into()));
       }
@@ -658,7 +650,7 @@ where
           .iter()
           .copied()
           .take(pixel_count)
-          .for_each(|y| image.push(r8g8b8a8_Srgb { r: y, g: y, b: y, a: 255 }.into()));
+          .for_each(|y| image.push(RGBA8888 { r: y, g: y, b: y, a: 255 }.into()));
       }
       NetpbmDataFormat::Binary_Y_U8 { max } => {
         let channel_max = i32x4::from(u8::MAX as i32).round_float();
@@ -676,7 +668,7 @@ where
           let y_scaled_u: u32x4 = cast(y_scaled_f.round_int());
           // little endian, so bytes are packed into lanes as BGRA
           let rgba_x4 = a_x4 | (y_scaled_u << 16) | (y_scaled_u << 8) | y_scaled_u /* << 0 */;
-          let rgba_array: [r8g8b8a8_Srgb; 4] = cast(rgba_x4);
+          let rgba_array: [RGBA8888; 4] = cast(rgba_x4);
           rgba_array.iter().copied().take(pixels_remaining).for_each(|p| image.push(p.into()));
           pixels_remaining = pixels_remaining.saturating_sub(4);
         }
@@ -701,7 +693,7 @@ where
           let y_scaled_u: u32x4 = cast(y_scaled_f.round_int());
           // little endian, so bytes are packed into lanes as BGRA
           let rgba_x4 = a_x4 | (y_scaled_u << 16) | (y_scaled_u << 8) | y_scaled_u /* << 0 */;
-          let rgba_array: [r8g8b8a8_Srgb; 4] = cast(rgba_x4);
+          let rgba_array: [RGBA8888; 4] = cast(rgba_x4);
           rgba_array.iter().copied().take(pixels_remaining).for_each(|p| image.push(p.into()));
           pixels_remaining = pixels_remaining.saturating_sub(4);
         }
@@ -725,7 +717,7 @@ where
           let y_scaled_u: u32x4 = cast(y_scaled_f.round_int());
           // little endian, so bytes are packed into lanes as BGRA
           let rgba_x4 = a_x4 | (y_scaled_u << 16) | (y_scaled_u << 8) | y_scaled_u /* << 0 */;
-          let rgba_array: [r8g8b8a8_Srgb; 4] = cast(rgba_x4);
+          let rgba_array: [RGBA8888; 4] = cast(rgba_x4);
           rgba_array.iter().copied().take(pixels_remaining).for_each(|p| image.push(p.into()));
           pixels_remaining = pixels_remaining.saturating_sub(4);
         }
@@ -749,7 +741,7 @@ where
           let y_scaled_u: u32x4 = cast(y_scaled_f.round_int());
           // little endian, so bytes are packed into lanes as BGRA
           let rgba_x4 = a_x4 | (y_scaled_u << 16) | (y_scaled_u << 8) | y_scaled_u /* << 0 */;
-          let rgba_array: [r8g8b8a8_Srgb; 4] = cast(rgba_x4);
+          let rgba_array: [RGBA8888; 4] = cast(rgba_x4);
           rgba_array.iter().copied().take(pixels_remaining).for_each(|p| image.push(p.into()));
           pixels_remaining = pixels_remaining.saturating_sub(4);
         }
@@ -763,7 +755,7 @@ where
           .iter()
           .copied()
           .take(pixel_count)
-          .for_each(|[y, a]| image.push(r8g8b8a8_Srgb { r: y, g: y, b: y, a }.into()));
+          .for_each(|[y, a]| image.push(RGBA8888 { r: y, g: y, b: y, a }.into()));
       }
       NetpbmDataFormat::Binary_YA_U8 { max } => {
         let channel_max = i32x4::from(u8::MAX as i32).round_float();
@@ -779,9 +771,9 @@ where
           let ya_raw = i32x4::from([y0 as i32, a0 as i32, y1 as i32, a1 as i32]).round_float();
           let ya_scaled_f = (ya_raw / image_max) * channel_max;
           let [y0, a0, y1, a1]: [u32; 4] = cast(ya_scaled_f.round_int());
-          image.push(r8g8b8a8_Srgb { r: y0 as u8, g: y0 as u8, b: y0 as u8, a: a0 as u8 }.into());
+          image.push(RGBA8888 { r: y0 as u8, g: y0 as u8, b: y0 as u8, a: a0 as u8 }.into());
           if pixels_remaining >= 2 {
-            image.push(r8g8b8a8_Srgb { r: y1 as u8, g: y1 as u8, b: y1 as u8, a: a1 as u8 }.into());
+            image.push(RGBA8888 { r: y1 as u8, g: y1 as u8, b: y1 as u8, a: a1 as u8 }.into());
           }
           pixels_remaining = pixels_remaining.saturating_sub(2);
         }
@@ -809,9 +801,9 @@ where
           let ya_raw = i32x4::from([y0 as i32, a0 as i32, y1 as i32, a1 as i32]).round_float();
           let ya_scaled_f = (ya_raw / image_max) * channel_max;
           let [y0, a0, y1, a1]: [u32; 4] = cast(ya_scaled_f.round_int());
-          image.push(r8g8b8a8_Srgb { r: y0 as u8, g: y0 as u8, b: y0 as u8, a: a0 as u8 }.into());
+          image.push(RGBA8888 { r: y0 as u8, g: y0 as u8, b: y0 as u8, a: a0 as u8 }.into());
           if pixels_remaining >= 2 {
-            image.push(r8g8b8a8_Srgb { r: y1 as u8, g: y1 as u8, b: y1 as u8, a: a1 as u8 }.into());
+            image.push(RGBA8888 { r: y1 as u8, g: y1 as u8, b: y1 as u8, a: a1 as u8 }.into());
           }
           pixels_remaining = pixels_remaining.saturating_sub(2);
         }
@@ -825,7 +817,7 @@ where
           .iter()
           .copied()
           .take(pixel_count)
-          .for_each(|[r, g, b]| image.push(r8g8b8a8_Srgb { r, g, b, a: u8::MAX }.into()));
+          .for_each(|[r, g, b]| image.push(RGBA8888 { r, g, b, a: u8::MAX }.into()));
       }
       NetpbmDataFormat::Binary_RGB_U8 { max } => {
         let channel_max = i32x4::from(u8::MAX as i32).round_float();
@@ -839,7 +831,7 @@ where
           let rgb_raw = i32x4::from([r as i32, g as i32, b as i32, max as i32]).round_float();
           let rgb_scaled_f = (rgb_raw / image_max) * channel_max;
           let [r, g, b, a]: [u32; 4] = cast(rgb_scaled_f.round_int());
-          image.push(r8g8b8a8_Srgb { r: r as u8, g: g as u8, b: b as u8, a: a as u8 }.into());
+          image.push(RGBA8888 { r: r as u8, g: g as u8, b: b as u8, a: a as u8 }.into());
         });
       }
       NetpbmDataFormat::Binary_RGB_U16BE { max } => {
@@ -860,7 +852,7 @@ where
           .round_float();
           let rgb_scaled_f = (rgb_raw / image_max) * channel_max;
           let [r, g, b, a]: [u32; 4] = cast(rgb_scaled_f.round_int());
-          image.push(r8g8b8a8_Srgb { r: r as u8, g: g as u8, b: b as u8, a: a as u8 }.into());
+          image.push(RGBA8888 { r: r as u8, g: g as u8, b: b as u8, a: a as u8 }.into());
         });
       }
       NetpbmDataFormat::Binary_RGB_F32BE { max } => {
@@ -885,7 +877,7 @@ where
           let rgb_raw = f32x4::from([r, g, b, max]);
           let rgb_scaled_f = (rgb_raw / image_max) * channel_max;
           let [r, g, b, a]: [u32; 4] = cast(rgb_scaled_f.round_int());
-          image.push(r8g8b8a8_Srgb { r: r as u8, g: g as u8, b: b as u8, a: a as u8 }.into());
+          image.push(RGBA8888 { r: r as u8, g: g as u8, b: b as u8, a: a as u8 }.into());
         });
       }
       NetpbmDataFormat::Binary_RGB_F32LE { max } => {
@@ -910,7 +902,7 @@ where
           let rgb_raw = f32x4::from([r, g, b, max]);
           let rgb_scaled_f = (rgb_raw / image_max) * channel_max;
           let [r, g, b, a]: [u32; 4] = cast(rgb_scaled_f.round_int());
-          image.push(r8g8b8a8_Srgb { r: r as u8, g: g as u8, b: b as u8, a: a as u8 }.into());
+          image.push(RGBA8888 { r: r as u8, g: g as u8, b: b as u8, a: a as u8 }.into());
         });
       }
       NetpbmDataFormat::Binary_RGBA_U8 { max: u8::MAX } => {
@@ -922,7 +914,7 @@ where
           .iter()
           .copied()
           .take(pixel_count)
-          .for_each(|[r, g, b, a]| image.push(r8g8b8a8_Srgb { r, g, b, a }.into()));
+          .for_each(|[r, g, b, a]| image.push(RGBA8888 { r, g, b, a }.into()));
       }
       NetpbmDataFormat::Binary_RGBA_U8 { max } => {
         let channel_max = i32x4::from(u8::MAX as i32).round_float();
@@ -936,7 +928,7 @@ where
           let rgb_raw = i32x4::from([r as i32, g as i32, b as i32, a as i32]).round_float();
           let rgb_scaled_f = (rgb_raw / image_max) * channel_max;
           let [r, g, b, a]: [u32; 4] = cast(rgb_scaled_f.round_int());
-          image.push(r8g8b8a8_Srgb { r: r as u8, g: g as u8, b: b as u8, a: a as u8 }.into());
+          image.push(RGBA8888 { r: r as u8, g: g as u8, b: b as u8, a: a as u8 }.into());
         });
       }
       NetpbmDataFormat::Binary_RGBA_U16BE { max } => {
@@ -957,7 +949,7 @@ where
           .round_float();
           let rgb_scaled_f = (rgb_raw / image_max) * channel_max;
           let [r, g, b, a]: [u32; 4] = cast(rgb_scaled_f.round_int());
-          image.push(r8g8b8a8_Srgb { r: r as u8, g: g as u8, b: b as u8, a: a as u8 }.into());
+          image.push(RGBA8888 { r: r as u8, g: g as u8, b: b as u8, a: a as u8 }.into());
         });
       }
       NetpbmDataFormat::Binary_RGBA_F32BE { max } => {
@@ -983,7 +975,7 @@ where
           let rgba_raw = f32x4::from([r, g, b, a]);
           let rgba_scaled_f = (rgba_raw / image_max) * channel_max;
           let [r, g, b, a]: [u32; 4] = cast(rgba_scaled_f.round_int());
-          image.push(r8g8b8a8_Srgb { r: r as u8, g: g as u8, b: b as u8, a: a as u8 }.into());
+          image.push(RGBA8888 { r: r as u8, g: g as u8, b: b as u8, a: a as u8 }.into());
         });
       }
       NetpbmDataFormat::Binary_RGBA_F32LE { max } => {
@@ -1009,13 +1001,12 @@ where
           let rgba_raw = f32x4::from([r, g, b, a]);
           let rgba_scaled_f = (rgba_raw / image_max) * channel_max;
           let [r, g, b, a]: [u32; 4] = cast(rgba_scaled_f.round_int());
-          image.push(r8g8b8a8_Srgb { r: r as u8, g: g as u8, b: b as u8, a: a as u8 }.into());
+          image.push(RGBA8888 { r: r as u8, g: g as u8, b: b as u8, a: a as u8 }.into());
         });
       }
     }
     if image.len() < pixel_count {
-      let black = r8g8b8a8_Srgb { r: 0, g: 0, b: 0, a: 0xFF };
-      image.resize(pixel_count, black.into());
+      image.resize(pixel_count, RGBA8888::BLACK.into());
     }
     let bitmap = Bitmap { pixels: image, width: header.width, height: header.height };
     Ok(bitmap)

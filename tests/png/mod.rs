@@ -1,4 +1,4 @@
-use imagine::png::PngRawChunkIter;
+use imagine::{pixel_formats::RGBA8888, png::PngRawChunkIter};
 use walkdir::WalkDir;
 
 #[test]
@@ -14,14 +14,13 @@ fn test_RawPngChunkIter_no_panics() {
 }
 
 #[test]
-#[cfg(all(feature = "png", feature = "alloc", feature = "miniz_oxide"))]
+#[cfg(all(feature = "alloc", feature = "miniz_oxide"))]
 fn test_pngs_do_not_panic_decoder() {
   // iter ALL files in the test folder, even non-png files shouldn't panic it.
 
   use std::ffi::OsStr;
 
   use imagine::image::Bitmap;
-  use pixel_formats::r8g8b8a8_Srgb;
   for entry in WalkDir::new("tests/").into_iter().filter_map(|e| e.ok()) {
     if entry.file_type().is_dir() {
       continue;
@@ -34,7 +33,7 @@ fn test_pngs_do_not_panic_decoder() {
         continue;
       }
     };
-    let image_result = Bitmap::<r8g8b8a8_Srgb>::try_from_png_bytes(&v);
+    let image_result = Bitmap::<RGBA8888>::try_from_png_bytes(&v);
     if entry.path().extension().and_then(OsStr::to_str).unwrap_or("") == "png"
       && !entry.path().file_name().and_then(OsStr::to_str).unwrap_or("").starts_with('x')
     {

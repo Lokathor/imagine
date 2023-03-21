@@ -2,7 +2,7 @@
 name = "imagine"
 description = "A crate to help with images."
 repository = "https://github.com/Lokathor/imagine"
-version = "0.5.0-pre.0"
+version = "0.4.0"
 edition = "2021"
 license = "Zlib OR Apache-2.0 OR MIT"
 categories = ["encoding", "no-std"]
@@ -10,34 +10,33 @@ categories = ["encoding", "no-std"]
 autoexamples = false
 
 [features]
-default = ["alloc", "miniz_oxide", "png", "bmp", "netpbm"]
+default = ["alloc", "png", "miniz_oxide", "bmp", "netpbm"]
+align_pixels = [] # Causes 4-byte pixel structs to be align=4 (normaly they're align=1)
 alloc = []
 png = [] # Portable Network Graphics
 bmp = [] # Windows Bitmap
 netpbm = ["wide"] # Covers all the Netpbm files: pbm, pgm, ppm, pnm, pam
 
 [dependencies]
-pixel_formats = "0.1.0"
-bytemuck = "1.13"
-bitfrob = "1"
-miniz_oxide = { version = "0.7", default-features = false, optional = true }
+bytemuck = "1.11"
+bitfrob = "0.2.3"
+miniz_oxide = { version = "0.6", default-features = false, optional = true }
 wide = { version = "0.7.6", default-features = false, optional = true }
 
 [dev-dependencies]
 getrandom = "0.2.7"
 walkdir = "2.3.2"
-image = "0.24.5"
-beryllium = "0.12.3"
-ezgl = "0.2.0"
+pixels = "0.9"
+winit = "0.26"
 
 [package.metadata.docs.rs]
 rustdoc-args = ["--cfg","docs_rs"]
 all-features = true
 
-#[[example]]
-#name = "png_chunk_print"
-#required-features = ["png"]
+[[example]]
+name = "png_chunk_print"
+required-features = ["png"]
 
-#[[example]]
-#name = "viewer"
-#required-features = ["alloc", "png", "miniz_oxide", "bmp"]
+[[example]]
+name = "imagine_viewer"
+required-features = ["alloc", "png", "miniz_oxide", "bmp"]

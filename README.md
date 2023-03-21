@@ -1,11 +1,9 @@
 
-# [Docs.rs](https://docs.rs/imagine/)
+* **[Latest Docs.rs](https://docs.rs/imagine/)**
 
 # `imagine`
 
-* `png`
-* `bmp`
-* `netpbm`
+* Can parse PNG files
 
 ## License
 

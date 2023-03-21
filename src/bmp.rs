@@ -53,13 +53,63 @@
 //! * 24 bits per pixel is direct color and the channel order is always implied
 //!   to be `[b,g,r]` within `[u8; 3]`.
 
-use crate::{sRGBIntent, AsciiArray};
-use bytemuck::cast;
 use core::{
   fmt::Write,
   num::{NonZeroU16, NonZeroU32},
 };
-use pixel_formats::r8g8b8a8_Srgb;
+
+/// An array of bytes expected to contain ascii data.
+///
+/// There's no actual enforced encoding! The `Debug` and `Display` impls will
+/// just `as` cast each byte into a character. This works just as expected for
+/// ascii data (`32..=126`), and is still safe for non-ascii data, but you just
+/// might get non-printing characters or multi-byte unicode characters.
+///
+/// This type really just exists to provide alternate `Debug` and `Display`
+/// impls for byte arrays. Image formats have magic byte sequences
+/// which are intended to match ascii sequences (such as PNG header tags), and
+/// so this is a useful newtype to use in other structures to give them a better
+/// `Debug` output.
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[repr(transparent)]
+pub struct AsciiArray<const N: usize>(pub [u8; N]);
+
+impl<const N: usize> Default for AsciiArray<N> {
+  #[inline]
+  #[must_use]
+  fn default() -> Self {
+    Self([0_u8; N])
+  }
+}
+
+impl<const N: usize> core::fmt::Debug for AsciiArray<N> {
+  #[inline]
+  fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+    f.write_char('\"')?;
+    for ch in self.0.iter().copied().map(|u| u as char) {
+      f.write_char(ch)?;
+    }
+    f.write_char('\"')?;
+    Ok(())
+  }
+}
+impl<const N: usize> core::fmt::Display for AsciiArray<N> {
+  #[inline]
+  fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+    for ch in self.0.iter().copied().map(|u| u as char) {
+      f.write_char(ch)?;
+    }
+    Ok(())
+  }
+}
+
+impl<const N: usize> From<[u8; N]> for AsciiArray<N> {
+  #[inline]
+  #[must_use]
+  fn from(array: [u8; N]) -> Self {
+    Self(array)
+  }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[non_exhaustive]
@@ -79,6 +129,13 @@ pub enum BmpError {
   /// know how to parse it.
   ParserIncomplete,
 }
+
+use bytemuck::cast;
+
+use crate::{
+  image::{Bitmap, Palmap},
+  pixel_formats::{sRGBIntent, RGBA8888},
+};
 
 #[inline]
 #[must_use]
@@ -136,145 +193,6 @@ pub const COMMON_BMP_TAGS: &[AsciiArray<2>] = &[
   AsciiArray(*b"PT"),
 ];
 
-/// Various possible compression styles for Bmp files.
-///
-/// * Indexed color images *can* use 4 bit RLE, 8 bit RLE, or Huffman 1D.
-/// * `BmpInfoHeaderOs22x` *can* use 24 bit RLE.
-/// * 16bpp and 32bpp images are *always* stored uncompressed.
-/// * Any other image can also be stored uncompressed.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub enum BmpCompression {
-  /// RGB, No compression.
-  RgbNoCompression = 0,
-
-  /// RGB, Run-length encoded, 8bpp
-  RgbRLE8 = 1,
-
-  /// RGB, Run-length encoded, 4bpp
-  RgbRLE4 = 2,
-
-  /// Meaning depends on header:
-  /// * OS/2 2.x: Huffman 1D
-  /// * InfoHeader: The image is not compressed, and following the header
-  ///   there's **three** `u32` bitmasks that let you locate the R, G, and B
-  ///   bits. This should only be used with 16 or 32 bits per pixel bitmaps.
-  Bitfields = 3,
-
-  /// Meaning depends on header:
-  /// * OS/2 2.x: RLE24
-  /// * InfoHeader v4+: A jpeg image
-  Jpeg = 4,
-
-  ///
-  /// * InfoHeader v4+: A png image
-  Png = 5,
-
-  /// The image is not compressed, and following the header
-  /// there's **four** `u32` bitmasks that let you locate the R, G, B, and A
-  /// bits. This should only be used with 16 or 32 bits per pixel bitmaps.
-  AlphaBitfields = 6,
-
-  /// CMYK, No compression.
-  CmykNoCompression = 11,
-
-  /// CMYK, Run-length encoded, 8bpp
-  CmykRLE8 = 12,
-
-  /// CMYK, Run-length encoded, 4bpp
-  CmykRLE4 = 13,
-}
-impl TryFrom<u32> for BmpCompression {
-  type Error = BmpError;
-  #[inline]
-  fn try_from(value: u32) -> Result<Self, Self::Error> {
-    use BmpCompression::*;
-    Ok(match value {
-      0 => RgbNoCompression,
-      1 => RgbRLE8,
-      2 => RgbRLE4,
-      3 => Bitfields,
-      4 => Jpeg,
-      5 => Png,
-      6 => AlphaBitfields,
-      11 => CmykNoCompression,
-      12 => CmykRLE8,
-      13 => CmykRLE4,
-      _ => return Err(BmpError::UnknownCompression),
-    })
-  }
-}
-impl From<BmpCompression> for u32 {
-  #[inline]
-  #[must_use]
-  fn from(c: BmpCompression) -> Self {
-    c as u32
-  }
-}
-
-/// Honestly, I don't know what this is about, but it's in the BMP header.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-#[allow(missing_docs)]
-pub enum Halftoning {
-  /// No halftoning, the most common style.
-  NoHalftoning,
-
-  /// [wikipedia](https://en.wikipedia.org/wiki/Error_diffusion)
-  ErrorDiffusion {
-    /// 0 indicates that the error is not diffused.
-    damping_percentage: u32,
-  },
-
-  /// PANDA: Processing Algorithm for Noncoded Document Acquisition.
-  Panda {
-    x: u32,
-    y: u32,
-  },
-
-  SuperCircle {
-    x: u32,
-    y: u32,
-  },
-
-  Unknown,
-}
-impl From<[u8; 10]> for Halftoning {
-  #[inline]
-  fn from(a: [u8; 10]) -> Self {
-    use BmpError::*;
-    match u16_le(&a[0..2]) {
-      0 => Halftoning::NoHalftoning,
-      1 => Halftoning::ErrorDiffusion { damping_percentage: u32_le(&a[2..6]) },
-      2 => Halftoning::Panda { x: u32_le(&a[2..6]), y: u32_le(&a[6..10]) },
-      3 => Halftoning::SuperCircle { x: u32_le(&a[2..6]), y: u32_le(&a[6..10]) },
-      _ => Halftoning::Unknown,
-    }
-  }
-}
-impl From<Halftoning> for [u8; 10] {
-  #[inline]
-  fn from(h: Halftoning) -> Self {
-    let mut a = [0; 10];
-    match h {
-      Halftoning::NoHalftoning | Halftoning::Unknown => (),
-      Halftoning::ErrorDiffusion { damping_percentage } => {
-        a[0..2].copy_from_slice(1_u16.to_le_bytes().as_slice());
-        a[2..6].copy_from_slice(damping_percentage.to_le_bytes().as_slice());
-      }
-      Halftoning::Panda { x, y } => {
-        a[0..2].copy_from_slice(2_u16.to_le_bytes().as_slice());
-        a[2..6].copy_from_slice(x.to_le_bytes().as_slice());
-        a[6..10].copy_from_slice(y.to_le_bytes().as_slice());
-      }
-      Halftoning::SuperCircle { x, y } => {
-        a[0..2].copy_from_slice(3_u16.to_le_bytes().as_slice());
-        a[2..6].copy_from_slice(x.to_le_bytes().as_slice());
-        a[6..10].copy_from_slice(y.to_le_bytes().as_slice());
-      }
-    }
-    a
-  }
-}
-
 /// The header at the start of all BMP files.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 pub struct BmpFileHeader {
@@ -330,148 +248,6 @@ impl BmpFileHeader {
     let (a, rest) = try_split_off_byte_array::<14>(bytes).ok_or(BmpError::InsufficientBytes)?;
     Ok((Self::from(a), rest))
   }
-}
-
-const LCS_CALIBRATED_RGB: u32 = 0x00000000;
-const LCS_sRGB: u32 = 0x7352_4742;
-/// This is b"Win " in little-endian, I'm not kidding.
-const LCS_WINDOWS_COLOR_SPACE: u32 = 0x5769_6E20;
-const PROFILE_LINKED: u32 = 0x4C49_4E4B;
-const PROFILE_EMBEDDED: u32 = 0x4D42_4544;
-const LCS_GM_ABS_COLORIMETRIC: u32 = 0x00000008;
-const LCS_GM_BUSINESS: u32 = 0x00000001;
-const LCS_GM_GRAPHICS: u32 = 0x00000002;
-const LCS_GM_IMAGES: u32 = 0x00000004;
-
-/// Colorspace data for the BMP.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-#[allow(missing_docs)]
-pub enum BmpColorspace {
-  /// The usual sRGB colorspace.
-  Srgb,
-
-  /// The windows default color space (On windows 10, this is also sRGB).
-  WindowsDefault,
-
-  /// A profile elsewhere is linked to (by name).
-  LinkedProfile,
-
-  /// A profile is embedded into the bitmap itself.
-  EmbeddedProfile,
-
-  /// The colorspace is calibrated according to the info given.
-  Calibrated { endpoints: CIEXYZTRIPLE, gamma_red: u32, gamma_green: u32, gamma_blue: u32 },
-
-  /// The colorspace tag was unknown.
-  ///
-  /// In this case, the endpoints and gamma values are still kept for you, but
-  /// the data might be nonsensical values (including possibly just zeroed).
-  Unknown { endpoints: CIEXYZTRIPLE, gamma_red: u32, gamma_green: u32, gamma_blue: u32 },
-}
-impl From<[u8; 52]> for BmpColorspace {
-  #[inline]
-  fn from(a: [u8; 52]) -> Self {
-    match u32_le(&a[0..4]) {
-      LCS_CALIBRATED_RGB => BmpColorspace::Calibrated {
-        endpoints: CIEXYZTRIPLE {
-          red: CIEXYZ { x: u32_le(&a[4..8]), y: u32_le(&a[8..12]), z: u32_le(&a[12..16]) },
-          green: CIEXYZ { x: u32_le(&a[16..20]), y: u32_le(&a[20..24]), z: u32_le(&a[24..28]) },
-          blue: CIEXYZ { x: u32_le(&a[28..32]), y: u32_le(&a[32..36]), z: u32_le(&a[36..40]) },
-        },
-        gamma_red: u32_le(&a[40..44]),
-        gamma_green: u32_le(&a[44..48]),
-        gamma_blue: u32_le(&a[48..52]),
-      },
-      LCS_sRGB => BmpColorspace::Srgb,
-      LCS_WINDOWS_COLOR_SPACE => BmpColorspace::WindowsDefault,
-      PROFILE_LINKED => BmpColorspace::LinkedProfile,
-      PROFILE_EMBEDDED => BmpColorspace::EmbeddedProfile,
-      _ => BmpColorspace::Unknown {
-        endpoints: CIEXYZTRIPLE {
-          red: CIEXYZ { x: u32_le(&a[4..8]), y: u32_le(&a[8..12]), z: u32_le(&a[12..16]) },
-          green: CIEXYZ { x: u32_le(&a[16..20]), y: u32_le(&a[20..24]), z: u32_le(&a[24..28]) },
-          blue: CIEXYZ { x: u32_le(&a[28..32]), y: u32_le(&a[32..36]), z: u32_le(&a[36..40]) },
-        },
-        gamma_red: u32_le(&a[40..44]),
-        gamma_green: u32_le(&a[44..48]),
-        gamma_blue: u32_le(&a[48..52]),
-      },
-    }
-  }
-}
-impl From<BmpColorspace> for [u8; 52] {
-  #[inline]
-  fn from(c: BmpColorspace) -> Self {
-    let mut a = [0; 52];
-    match c {
-      BmpColorspace::Srgb => {
-        a[0..4].copy_from_slice(LCS_sRGB.to_le_bytes().as_slice());
-      }
-      BmpColorspace::WindowsDefault => {
-        a[0..4].copy_from_slice(LCS_WINDOWS_COLOR_SPACE.to_le_bytes().as_slice());
-      }
-      BmpColorspace::LinkedProfile => {
-        a[0..4].copy_from_slice(PROFILE_LINKED.to_le_bytes().as_slice());
-      }
-      BmpColorspace::EmbeddedProfile => {
-        a[0..4].copy_from_slice(PROFILE_EMBEDDED.to_le_bytes().as_slice());
-      }
-      BmpColorspace::Calibrated { endpoints, gamma_red, gamma_green, gamma_blue } => {
-        a[0..4].copy_from_slice(LCS_CALIBRATED_RGB.to_le_bytes().as_slice());
-        a[4..8].copy_from_slice(endpoints.red.x.to_le_bytes().as_slice());
-        a[8..12].copy_from_slice(endpoints.red.y.to_le_bytes().as_slice());
-        a[12..16].copy_from_slice(endpoints.red.z.to_le_bytes().as_slice());
-        a[16..20].copy_from_slice(endpoints.green.x.to_le_bytes().as_slice());
-        a[20..24].copy_from_slice(endpoints.green.y.to_le_bytes().as_slice());
-        a[24..28].copy_from_slice(endpoints.green.z.to_le_bytes().as_slice());
-        a[28..32].copy_from_slice(endpoints.blue.x.to_le_bytes().as_slice());
-        a[32..36].copy_from_slice(endpoints.blue.y.to_le_bytes().as_slice());
-        a[36..40].copy_from_slice(endpoints.blue.z.to_le_bytes().as_slice());
-        a[40..44].copy_from_slice(gamma_red.to_le_bytes().as_slice());
-        a[44..48].copy_from_slice(gamma_green.to_le_bytes().as_slice());
-        a[48..52].copy_from_slice(gamma_blue.to_le_bytes().as_slice());
-      }
-      BmpColorspace::Unknown { endpoints, gamma_red, gamma_green, gamma_blue } => {
-        // this is a made up value for unknown color spaces, it's hopefully not
-        // gonna clash with anything else.
-        a[0..4].copy_from_slice((u32::MAX - 1).to_le_bytes().as_slice());
-        a[4..8].copy_from_slice(endpoints.red.x.to_le_bytes().as_slice());
-        a[8..12].copy_from_slice(endpoints.red.y.to_le_bytes().as_slice());
-        a[12..16].copy_from_slice(endpoints.red.z.to_le_bytes().as_slice());
-        a[16..20].copy_from_slice(endpoints.green.x.to_le_bytes().as_slice());
-        a[20..24].copy_from_slice(endpoints.green.y.to_le_bytes().as_slice());
-        a[24..28].copy_from_slice(endpoints.green.z.to_le_bytes().as_slice());
-        a[28..32].copy_from_slice(endpoints.blue.x.to_le_bytes().as_slice());
-        a[32..36].copy_from_slice(endpoints.blue.y.to_le_bytes().as_slice());
-        a[36..40].copy_from_slice(endpoints.blue.z.to_le_bytes().as_slice());
-        a[40..44].copy_from_slice(gamma_red.to_le_bytes().as_slice());
-        a[44..48].copy_from_slice(gamma_green.to_le_bytes().as_slice());
-        a[48..52].copy_from_slice(gamma_blue.to_le_bytes().as_slice());
-      }
-    }
-    a
-  }
-}
-
-/// Fixed point, 2.30
-pub type FXPT2DOT30 = u32;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-#[repr(C)]
-#[allow(missing_docs)]
-pub struct CIEXYZ {
-  pub x: FXPT2DOT30,
-  pub y: FXPT2DOT30,
-  pub z: FXPT2DOT30,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-#[repr(C)]
-#[allow(missing_docs)]
-pub struct CIEXYZTRIPLE {
-  pub red: CIEXYZ,
-  pub green: CIEXYZ,
-  pub blue: CIEXYZ,
 }
 
 /// An enum over the various BMP info header versions.
@@ -703,6 +479,81 @@ impl From<BmpInfoHeaderCore> for [u8; 12] {
   }
 }
 
+/// Various possible compression styles for Bmp files.
+///
+/// * Indexed color images *can* use 4 bit RLE, 8 bit RLE, or Huffman 1D.
+/// * `BmpInfoHeaderOs22x` *can* use 24 bit RLE.
+/// * 16bpp and 32bpp images are *always* stored uncompressed.
+/// * Any other image can also be stored uncompressed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum BmpCompression {
+  /// RGB, No compression.
+  RgbNoCompression = 0,
+
+  /// RGB, Run-length encoded, 8bpp
+  RgbRLE8 = 1,
+
+  /// RGB, Run-length encoded, 4bpp
+  RgbRLE4 = 2,
+
+  /// Meaning depends on header:
+  /// * OS/2 2.x: Huffman 1D
+  /// * InfoHeader: The image is not compressed, and following the header
+  ///   there's **three** `u32` bitmasks that let you locate the R, G, and B
+  ///   bits. This should only be used with 16 or 32 bits per pixel bitmaps.
+  Bitfields = 3,
+
+  /// Meaning depends on header:
+  /// * OS/2 2.x: RLE24
+  /// * InfoHeader v4+: A jpeg image
+  Jpeg = 4,
+
+  ///
+  /// * InfoHeader v4+: A png image
+  Png = 5,
+
+  /// The image is not compressed, and following the header
+  /// there's **four** `u32` bitmasks that let you locate the R, G, B, and A
+  /// bits. This should only be used with 16 or 32 bits per pixel bitmaps.
+  AlphaBitfields = 6,
+
+  /// CMYK, No compression.
+  CmykNoCompression = 11,
+
+  /// CMYK, Run-length encoded, 8bpp
+  CmykRLE8 = 12,
+
+  /// CMYK, Run-length encoded, 4bpp
+  CmykRLE4 = 13,
+}
+impl TryFrom<u32> for BmpCompression {
+  type Error = BmpError;
+  #[inline]
+  fn try_from(value: u32) -> Result<Self, Self::Error> {
+    use BmpCompression::*;
+    Ok(match value {
+      0 => RgbNoCompression,
+      1 => RgbRLE8,
+      2 => RgbRLE4,
+      3 => Bitfields,
+      4 => Jpeg,
+      5 => Png,
+      6 => AlphaBitfields,
+      11 => CmykNoCompression,
+      12 => CmykRLE8,
+      13 => CmykRLE4,
+      _ => return Err(BmpError::UnknownCompression),
+    })
+  }
+}
+impl From<BmpCompression> for u32 {
+  #[inline]
+  #[must_use]
+  fn from(c: BmpCompression) -> Self {
+    c as u32
+  }
+}
+
 /// Header for Windows 3.1 or later.
 ///
 /// This is the most commonly used header, unless the image actually needs to
@@ -822,6 +673,70 @@ impl BmpInfoHeaderV1 {
         }
       }
     }
+  }
+}
+
+/// Honestly, I don't know what this is about, but it's in the BMP header.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[allow(missing_docs)]
+pub enum Halftoning {
+  /// No halftoning, the most common style.
+  NoHalftoning,
+
+  /// [wikipedia](https://en.wikipedia.org/wiki/Error_diffusion)
+  ErrorDiffusion {
+    /// 0 indicates that the error is not diffused.
+    damping_percentage: u32,
+  },
+
+  /// PANDA: Processing Algorithm for Noncoded Document Acquisition.
+  Panda {
+    x: u32,
+    y: u32,
+  },
+
+  SuperCircle {
+    x: u32,
+    y: u32,
+  },
+
+  Unknown,
+}
+impl From<[u8; 10]> for Halftoning {
+  #[inline]
+  fn from(a: [u8; 10]) -> Self {
+    use BmpError::*;
+    match u16_le(&a[0..2]) {
+      0 => Halftoning::NoHalftoning,
+      1 => Halftoning::ErrorDiffusion { damping_percentage: u32_le(&a[2..6]) },
+      2 => Halftoning::Panda { x: u32_le(&a[2..6]), y: u32_le(&a[6..10]) },
+      3 => Halftoning::SuperCircle { x: u32_le(&a[2..6]), y: u32_le(&a[6..10]) },
+      _ => Halftoning::Unknown,
+    }
+  }
+}
+impl From<Halftoning> for [u8; 10] {
+  #[inline]
+  fn from(h: Halftoning) -> Self {
+    let mut a = [0; 10];
+    match h {
+      Halftoning::NoHalftoning | Halftoning::Unknown => (),
+      Halftoning::ErrorDiffusion { damping_percentage } => {
+        a[0..2].copy_from_slice(1_u16.to_le_bytes().as_slice());
+        a[2..6].copy_from_slice(damping_percentage.to_le_bytes().as_slice());
+      }
+      Halftoning::Panda { x, y } => {
+        a[0..2].copy_from_slice(2_u16.to_le_bytes().as_slice());
+        a[2..6].copy_from_slice(x.to_le_bytes().as_slice());
+        a[6..10].copy_from_slice(y.to_le_bytes().as_slice());
+      }
+      Halftoning::SuperCircle { x, y } => {
+        a[0..2].copy_from_slice(3_u16.to_le_bytes().as_slice());
+        a[2..6].copy_from_slice(x.to_le_bytes().as_slice());
+        a[6..10].copy_from_slice(y.to_le_bytes().as_slice());
+      }
+    }
+    a
   }
 }
 
@@ -1294,6 +1209,144 @@ impl BmpInfoHeaderV3 {
   }
 }
 
+const LCS_CALIBRATED_RGB: u32 = 0x00000000;
+const LCS_sRGB: u32 = 0x7352_4742;
+/// This is b"Win " in little-endian, I'm not kidding.
+const LCS_WINDOWS_COLOR_SPACE: u32 = 0x5769_6E20;
+const PROFILE_LINKED: u32 = 0x4C49_4E4B;
+const PROFILE_EMBEDDED: u32 = 0x4D42_4544;
+
+/// Colorspace data for the BMP.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[allow(missing_docs)]
+pub enum BmpColorspace {
+  /// The usual sRGB colorspace.
+  Srgb,
+
+  /// The windows default color space (On windows 10, this is also sRGB).
+  WindowsDefault,
+
+  /// A profile elsewhere is linked to (by name).
+  LinkedProfile,
+
+  /// A profile is embedded into the bitmap itself.
+  EmbeddedProfile,
+
+  /// The colorspace is calibrated according to the info given.
+  Calibrated { endpoints: CIEXYZTRIPLE, gamma_red: u32, gamma_green: u32, gamma_blue: u32 },
+
+  /// The colorspace tag was unknown.
+  ///
+  /// In this case, the endpoints and gamma values are still kept for you, but
+  /// the data might be nonsensical values (including possibly just zeroed).
+  Unknown { endpoints: CIEXYZTRIPLE, gamma_red: u32, gamma_green: u32, gamma_blue: u32 },
+}
+impl From<[u8; 52]> for BmpColorspace {
+  #[inline]
+  fn from(a: [u8; 52]) -> Self {
+    match u32_le(&a[0..4]) {
+      LCS_CALIBRATED_RGB => BmpColorspace::Calibrated {
+        endpoints: CIEXYZTRIPLE {
+          red: CIEXYZ { x: u32_le(&a[4..8]), y: u32_le(&a[8..12]), z: u32_le(&a[12..16]) },
+          green: CIEXYZ { x: u32_le(&a[16..20]), y: u32_le(&a[20..24]), z: u32_le(&a[24..28]) },
+          blue: CIEXYZ { x: u32_le(&a[28..32]), y: u32_le(&a[32..36]), z: u32_le(&a[36..40]) },
+        },
+        gamma_red: u32_le(&a[40..44]),
+        gamma_green: u32_le(&a[44..48]),
+        gamma_blue: u32_le(&a[48..52]),
+      },
+      LCS_sRGB => BmpColorspace::Srgb,
+      LCS_WINDOWS_COLOR_SPACE => BmpColorspace::WindowsDefault,
+      PROFILE_LINKED => BmpColorspace::LinkedProfile,
+      PROFILE_EMBEDDED => BmpColorspace::EmbeddedProfile,
+      _ => BmpColorspace::Unknown {
+        endpoints: CIEXYZTRIPLE {
+          red: CIEXYZ { x: u32_le(&a[4..8]), y: u32_le(&a[8..12]), z: u32_le(&a[12..16]) },
+          green: CIEXYZ { x: u32_le(&a[16..20]), y: u32_le(&a[20..24]), z: u32_le(&a[24..28]) },
+          blue: CIEXYZ { x: u32_le(&a[28..32]), y: u32_le(&a[32..36]), z: u32_le(&a[36..40]) },
+        },
+        gamma_red: u32_le(&a[40..44]),
+        gamma_green: u32_le(&a[44..48]),
+        gamma_blue: u32_le(&a[48..52]),
+      },
+    }
+  }
+}
+impl From<BmpColorspace> for [u8; 52] {
+  #[inline]
+  fn from(c: BmpColorspace) -> Self {
+    let mut a = [0; 52];
+    match c {
+      BmpColorspace::Srgb => {
+        a[0..4].copy_from_slice(LCS_sRGB.to_le_bytes().as_slice());
+      }
+      BmpColorspace::WindowsDefault => {
+        a[0..4].copy_from_slice(LCS_WINDOWS_COLOR_SPACE.to_le_bytes().as_slice());
+      }
+      BmpColorspace::LinkedProfile => {
+        a[0..4].copy_from_slice(PROFILE_LINKED.to_le_bytes().as_slice());
+      }
+      BmpColorspace::EmbeddedProfile => {
+        a[0..4].copy_from_slice(PROFILE_EMBEDDED.to_le_bytes().as_slice());
+      }
+      BmpColorspace::Calibrated { endpoints, gamma_red, gamma_green, gamma_blue } => {
+        a[0..4].copy_from_slice(LCS_CALIBRATED_RGB.to_le_bytes().as_slice());
+        a[4..8].copy_from_slice(endpoints.red.x.to_le_bytes().as_slice());
+        a[8..12].copy_from_slice(endpoints.red.y.to_le_bytes().as_slice());
+        a[12..16].copy_from_slice(endpoints.red.z.to_le_bytes().as_slice());
+        a[16..20].copy_from_slice(endpoints.green.x.to_le_bytes().as_slice());
+        a[20..24].copy_from_slice(endpoints.green.y.to_le_bytes().as_slice());
+        a[24..28].copy_from_slice(endpoints.green.z.to_le_bytes().as_slice());
+        a[28..32].copy_from_slice(endpoints.blue.x.to_le_bytes().as_slice());
+        a[32..36].copy_from_slice(endpoints.blue.y.to_le_bytes().as_slice());
+        a[36..40].copy_from_slice(endpoints.blue.z.to_le_bytes().as_slice());
+        a[40..44].copy_from_slice(gamma_red.to_le_bytes().as_slice());
+        a[44..48].copy_from_slice(gamma_green.to_le_bytes().as_slice());
+        a[48..52].copy_from_slice(gamma_blue.to_le_bytes().as_slice());
+      }
+      BmpColorspace::Unknown { endpoints, gamma_red, gamma_green, gamma_blue } => {
+        // this is a made up value for unknown color spaces, it's hopefully not
+        // gonna clash with anything else.
+        a[0..4].copy_from_slice((u32::MAX - 1).to_le_bytes().as_slice());
+        a[4..8].copy_from_slice(endpoints.red.x.to_le_bytes().as_slice());
+        a[8..12].copy_from_slice(endpoints.red.y.to_le_bytes().as_slice());
+        a[12..16].copy_from_slice(endpoints.red.z.to_le_bytes().as_slice());
+        a[16..20].copy_from_slice(endpoints.green.x.to_le_bytes().as_slice());
+        a[20..24].copy_from_slice(endpoints.green.y.to_le_bytes().as_slice());
+        a[24..28].copy_from_slice(endpoints.green.z.to_le_bytes().as_slice());
+        a[28..32].copy_from_slice(endpoints.blue.x.to_le_bytes().as_slice());
+        a[32..36].copy_from_slice(endpoints.blue.y.to_le_bytes().as_slice());
+        a[36..40].copy_from_slice(endpoints.blue.z.to_le_bytes().as_slice());
+        a[40..44].copy_from_slice(gamma_red.to_le_bytes().as_slice());
+        a[44..48].copy_from_slice(gamma_green.to_le_bytes().as_slice());
+        a[48..52].copy_from_slice(gamma_blue.to_le_bytes().as_slice());
+      }
+    }
+    a
+  }
+}
+
+/// Fixed point, 2.30
+pub type FXPT2DOT30 = u32;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[repr(C)]
+#[allow(missing_docs)]
+pub struct CIEXYZ {
+  pub x: FXPT2DOT30,
+  pub y: FXPT2DOT30,
+  pub z: FXPT2DOT30,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[repr(C)]
+#[allow(missing_docs)]
+pub struct CIEXYZTRIPLE {
+  pub red: CIEXYZ,
+  pub green: CIEXYZ,
+  pub blue: CIEXYZ,
+}
+
 /// InfoHeader version 4.
 ///
 /// Compared to V3, it adds color space info.
@@ -1549,6 +1602,10 @@ pub struct BmpInfoHeaderV5 {
   /// Otherwise this is... probably zero?
   pub embedded_profile_size: u32,
 }
+const LCS_GM_ABS_COLORIMETRIC: u32 = 0x00000008;
+const LCS_GM_BUSINESS: u32 = 0x00000001;
+const LCS_GM_GRAPHICS: u32 = 0x00000002;
+const LCS_GM_IMAGES: u32 = 0x00000004;
 impl TryFrom<[u8; 124]> for BmpInfoHeaderV5 {
   type Error = BmpError;
   #[inline]
@@ -1667,7 +1724,7 @@ impl BmpInfoHeaderV5 {
 #[cfg(feature = "alloc")]
 impl<P> crate::image::Bitmap<P>
 where
-  P: From<r8g8b8a8_Srgb> + Clone,
+  P: From<RGBA8888> + Clone,
 {
   /// Attempts to parse the bytes of a BMP file into a bitmap.
   ///
@@ -1737,16 +1794,12 @@ where
     final_storage.try_reserve(pixel_count).map_err(|_| BmpError::AllocError)?;
     final_storage.resize(
       pixel_count,
-      (if a_mask != 0 {
-        r8g8b8a8_Srgb::default()
-      } else {
-        r8g8b8a8_Srgb { r: 0, g: 0, b: 0, a: 0xFF }
-      })
-      .into(),
+      (if a_mask != 0 { RGBA8888::default() } else { RGBA8888 { r: 0, g: 0, b: 0, a: 0xFF } })
+        .into(),
     );
 
     #[allow(unused_assignments)]
-    let palette: Vec<r8g8b8a8_Srgb> = match info_header.palette_len() {
+    let palette: Vec<RGBA8888> = match info_header.palette_len() {
       0 => Vec::new(),
       count => {
         let mut v = Vec::new();
@@ -1762,7 +1815,7 @@ where
             rest = new_rest;
             let pal_slice: &[[u8; 3]] = cast_slice(pal_slice);
             for [b, g, r] in pal_slice.iter().copied() {
-              v.push(r8g8b8a8_Srgb { r, g, b, a: 0xFF });
+              v.push(RGBA8888 { r, g, b, a: 0xFF });
             }
           }
           _ => {
@@ -1775,7 +1828,7 @@ where
             rest = new_rest;
             let pal_slice: &[[u8; 4]] = cast_slice(pal_slice);
             for [b, g, r, a] in pal_slice.iter().copied() {
-              v.push(r8g8b8a8_Srgb { r, g, b, a });
+              v.push(RGBA8888 { r, g, b, a });
             }
             if v.iter().copied().all(|c| c.a == 0) {
               v.iter_mut().for_each(|c| c.a = 0xFF);
@@ -1871,7 +1924,7 @@ where
                     .copied()
                     .enumerate()
                 {
-                  let p: P = r8g8b8a8_Srgb { r, g, b, a: 0xFF }.into();
+                  let p: P = RGBA8888 { r, g, b, a: 0xFF }.into();
                   final_storage[y * width + x] = p;
                 }
               }
@@ -1906,7 +1959,7 @@ where
                   let g: u8 = if g_mask != 0 { ((((u & g_mask) >> g_shift) as f32 / g_max) * 255.0) as u8 } else { 0 };
                   let b: u8 = if b_mask != 0 { ((((u & b_mask) >> b_shift) as f32 / b_max) * 255.0) as u8 } else { 0 };
                   let a: u8 = if a_mask != 0 { ((((u & a_mask) >> a_shift) as f32 / a_max) * 255.0) as u8 } else { 0xFF };
-                  let p: P = r8g8b8a8_Srgb { r, g, b, a }.into();
+                  let p: P = RGBA8888 { r, g, b, a }.into();
                   final_storage[y * width + x] = p;
                 }
               }
@@ -1941,7 +1994,7 @@ where
                   let g: u8 = if g_mask != 0 { ((((u & g_mask) >> g_shift) as f32 / g_max) * 255.0) as u8 } else { 0 };
                   let b: u8 = if b_mask != 0 { ((((u & b_mask) >> b_shift) as f32 / b_max) * 255.0) as u8 } else { 0 };
                   let a: u8 = if a_mask != 0 { ((((u & a_mask) >> a_shift) as f32 / a_max) * 255.0) as u8 } else { 0xFF };
-                  let p: P = r8g8b8a8_Srgb { r, g, b, a }.into();
+                  let p: P = RGBA8888 { r, g, b, a }.into();
                   final_storage[y * width + x] = p;
                 }
               }
@@ -2182,8 +2235,7 @@ where
       BmpCompression::CmykRLE8 => return Err(BmpError::ParserIncomplete),
     }
 
-    let bitmap =
-      crate::image::Bitmap { height: height as u32, width: width as u32, pixels: final_storage };
+    let bitmap = Bitmap { height: height as u32, width: width as u32, pixels: final_storage };
     Ok(bitmap)
   }
 }
@@ -2191,7 +2243,7 @@ where
 #[cfg(feature = "alloc")]
 impl<P> crate::image::Palmap<u8, P>
 where
-  P: From<r8g8b8a8_Srgb> + Clone,
+  P: From<RGBA8888> + Clone,
 {
   /// Attempts to make a [Palmap](crate::image::Palmap) from BMP bytes.
   ///
@@ -2223,7 +2275,7 @@ where
     let palette: Vec<P> = match info_header.palette_len() {
       0 => Vec::new(),
       pal_count => {
-        let mut v: Vec<r8g8b8a8_Srgb> = Vec::new();
+        let mut v: Vec<RGBA8888> = Vec::new();
         v.try_reserve(pal_count).map_err(|_| BmpError::AllocError)?;
         match info_header {
           BmpInfoHeader::Core(_) => {
@@ -2236,7 +2288,7 @@ where
             rest = new_rest;
             let pal_slice: &[[u8; 3]] = cast_slice(pal_slice);
             for [b, g, r] in pal_slice.iter().copied() {
-              v.push(r8g8b8a8_Srgb { r, g, b, a: 0xFF });
+              v.push(RGBA8888 { r, g, b, a: 0xFF });
             }
           }
           _ => {
@@ -2249,7 +2301,7 @@ where
             rest = new_rest;
             let pal_slice: &[[u8; 4]] = cast_slice(pal_slice);
             for [b, g, r, a] in pal_slice.iter().copied() {
-              v.push(r8g8b8a8_Srgb { r, g, b, a });
+              v.push(RGBA8888 { r, g, b, a });
             }
             if v.iter().copied().all(|c| c.a == 0) {
               v.iter_mut().for_each(|c| c.a = 0xFF);
@@ -2271,8 +2323,7 @@ where
       v
     };
 
-    let mut palmap: crate::image::Palmap<u8, P> =
-      crate::image::Palmap { width, height, indexes, palette };
+    let mut palmap: Palmap<u8, P> = Palmap { width, height, indexes, palette };
 
     let pixel_data_start_index: usize = file_header.pixel_data_offset as usize;
     let pixel_data_end_index: usize = pixel_data_start_index + info_header.pixel_data_len();
