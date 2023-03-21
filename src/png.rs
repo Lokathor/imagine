@@ -108,6 +108,7 @@ impl PngRawChunkType {
   pub const tRNS: Self = Self(*b"tRNS");
   pub const bKGD: Self = Self(*b"bKGD");
   pub const sRGB: Self = Self(*b"sRGB");
+  pub const gAMA: Self = Self(*b"gAMA");
 }
 impl Debug for PngRawChunkType {
   fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
@@ -195,6 +196,8 @@ pub enum PngChunk<'b> {
   IHDR(IHDR),
   /// sRGB Info
   sRGB(sRGBIntent),
+  /// Gamma value times 100,000.
+  gAMA(u32),
   /// Palette
   PLTE(PLTE<'b>),
   /// Transparency
@@ -206,7 +209,6 @@ pub enum PngChunk<'b> {
   /// Image End
   IEND,
 }
-// * TODO: gAMA
 // * TODO: cHRM
 // * TODO: sBIT
 impl<'b> TryFrom<PngRawChunk<'b>> for PngChunk<'b> {
@@ -234,6 +236,9 @@ impl<'b> TryFrom<PngRawChunk<'b>> for PngChunk<'b> {
         Some(3) => sRGBIntent::AbsoluteColorimetric,
         _ => return Err(raw),
       }),
+      PngRawChunkType::gAMA if raw.data.len() == 4 => {
+        PngChunk::gAMA(u32::from_be_bytes(raw.data.try_into().unwrap()))
+      }
       PngRawChunkType::IDAT => PngChunk::IDAT(IDAT::from(raw.data)),
       PngRawChunkType::IEND => PngChunk::IEND,
       _ => return Err(raw),
@@ -435,8 +440,8 @@ impl<'b> tRNS<'b> {
   /// Fails when the chunk has the wrong length for grayscale.
   #[inline]
   pub const fn try_to_grayscale(&self) -> Option<u16> {
-    match self.0 {
-      [y0, y1] => Some(u16::from_be_bytes([*y0, *y1])),
+    match *self.0 {
+      [y0, y1] => Some(u16::from_be_bytes([y0, y1])),
       _ => None,
     }
   }
@@ -445,11 +450,11 @@ impl<'b> tRNS<'b> {
   /// Fails when the chunk has the wrong length for rgb.
   #[inline]
   pub const fn try_to_rgb(&self) -> Option<[u16; 3]> {
-    match self.0 {
+    match *self.0 {
       [r0, r1, g0, g1, b0, b1] => Some([
-        u16::from_be_bytes([*r0, *r1]),
-        u16::from_be_bytes([*g0, *g1]),
-        u16::from_be_bytes([*b0, *b1]),
+        u16::from_be_bytes([r0, r1]),
+        u16::from_be_bytes([g0, g1]),
+        u16::from_be_bytes([b0, b1]),
       ]),
       _ => None,
     }
@@ -683,42 +688,21 @@ const fn reduced_image_dimensions(full_width: u32, full_height: u32) -> [(u32, u
   // 5 6 5 6 5 6 5 6
   // 7 7 7 7 7 7 7 7
   // ```
-  let full_patterns_wide = full_width / 8;
-  let full_patterns_high = full_height / 8;
+  let grids_w = full_width / 8;
+  let grids_h = full_height / 8;
   //
-  let partial_pattern_width = full_width % 8;
-  let partial_pattern_height = full_height % 8;
+  let partial_w = full_width % 8;
+  let partial_h = full_height % 8;
   //
   let zero = (full_width, full_height);
   //
-  let first = (
-    full_patterns_wide + (partial_pattern_width + 7) / 8,
-    full_patterns_high + (partial_pattern_height + 7) / 8,
-  );
-  let second = (
-    full_patterns_wide + (partial_pattern_width + 3) / 8,
-    full_patterns_high + (partial_pattern_height + 7) / 8,
-  );
-  let third = (
-    full_patterns_wide * 2 + ((partial_pattern_width + 3) / 4),
-    full_patterns_high + ((partial_pattern_height + 3) / 8),
-  );
-  let fourth = (
-    full_patterns_wide * 2 + (partial_pattern_width + 1) / 4,
-    full_patterns_high * 2 + (partial_pattern_height + 3) / 4,
-  );
-  let fifth = (
-    full_patterns_wide * 4 + ((partial_pattern_width + 1) / 2),
-    full_patterns_high * 2 + (partial_pattern_height + 1) / 4,
-  );
-  let sixth = (
-    full_patterns_wide * 4 + partial_pattern_width / 2,
-    full_patterns_high * 4 + ((partial_pattern_height + 1) / 2),
-  );
-  let seventh = (
-    full_patterns_wide * 8 + partial_pattern_width,
-    full_patterns_high * 4 + (partial_pattern_height / 2),
-  );
+  let first = (grids_w + (partial_w + 7) / 8, grids_h + (partial_h + 7) / 8);
+  let second = (grids_w + (partial_w + 3) / 8, grids_h + (partial_h + 7) / 8);
+  let third = (grids_w * 2 + ((partial_w + 3) / 4), grids_h + ((partial_h + 3) / 8));
+  let fourth = (grids_w * 2 + (partial_w + 1) / 4, grids_h * 2 + (partial_h + 3) / 4);
+  let fifth = (grids_w * 4 + ((partial_w + 1) / 2), grids_h * 2 + (partial_h + 1) / 4);
+  let sixth = (grids_w * 4 + partial_w / 2, grids_h * 4 + ((partial_h + 1) / 2));
+  let seventh = (grids_w * 8 + partial_w, grids_h * 4 + (partial_h / 2));
   //
   [zero, first, second, third, fourth, fifth, sixth, seventh]
 }
