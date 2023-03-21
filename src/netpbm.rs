@@ -24,8 +24,6 @@
 
 use pixel_formats::r8g8b8a8_Unorm;
 
-use crate::image::Bitmap;
-
 /// Parses for a netpbm header, along with the pixel data.
 ///
 /// * **Success:** Returns the header and pixel data slice. The header contains
@@ -519,6 +517,7 @@ where
 {
   #[allow(clippy::missing_inline_in_public_items)]
   pub fn try_from_netpbm_bytes(netpbm: &[u8]) -> Result<Self, NetpbmError> {
+    use crate::image::Bitmap;
     use alloc::vec::Vec;
     use bytemuck::*;
     use core::mem::size_of;
