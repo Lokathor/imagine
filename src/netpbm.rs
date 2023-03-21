@@ -1,43 +1,31 @@
 #![forbid(unsafe_code)]
 
-//! This module gives support for the various
-//! [Netpbm](https://en.wikipedia.org/wiki/Netpbm) formats.
+//! The various [Netpbm](https://en.wikipedia.org/wiki/Netpbm) formats.
 //!
-//! Several file extensions are used by this format family: `.pbm`, `.pgm`,
-//! `.ppm`, `.pnm`, and `.pam`. They're all extremely simple formats with
-//! absolutely no compression.
+//! This supports the `P1` through `P6` formats:
+//! * `P2` and `P3` can have any maximum that fits in `u32`.
+//! * `P5` and `P6` can have any maximum that fits in `u8`.
 //!
-//! First use [`netpbm_parse_header`] to get the header information and the
-//! pixel data bytes. This gives you the size of the image, and also tells you
-//! how to interpret the pixel bytes. Then you can use the appropriate iterator
-//! on the pixel bytes to decode all the pixel values.
-//!
-//! Important: The colorspace of a Netpbm file is never given in the header.
-//! Instead, you have to guess at what color space the data is intended for.
-//! * Color images will *often* use [CIE Rec. 709](https://en.wikipedia.org/wiki/Rec._709),
-//!   but might be using sRGB, or they might even be linear. The "CIE Rec. 709"
-//!   colorspace is *similar* to sRGB with a slightly different gamma curve, so
-//!   mostly you can assume sRGB and it'll work often enough.
-//! * Monochrome images are *often* in linear space, but might use sRGB.
-//! * There are also 1-bit-per-pixel images, but since they are always either
-//!   the minimum value they're effectively color space independent.
+//! Generally, you should just use the [`netpbm_try_bitmap`] function to
+//! generate a [Bitmap](crate::image::Bitmap) from the RGB data with a single
+//! function call (requires the `alloc` crate feature).
 
 use core::{
   num::ParseIntError,
   str::{from_utf8, Utf8Error},
 };
-
 use pixel_formats::r32g32b32_Sfloat;
 
+/// An error during Netpbm parsing.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum NetpbmError {
+  /// Couldn't allocate space for the bitmap.
   #[cfg(feature = "alloc")]
   AllocError,
+  /// Failed to parse the bytes.
   ParseError,
-  /// The tag value given wasn't in the supported range of `1..=6`
+  /// The tag value parsed wasn't in the supported range of `1..=6`
   TagError,
-  /// The current version doesn't handle maximum values above 255
-  MaxValueError,
 }
 impl From<Utf8Error> for NetpbmError {
   #[inline]
@@ -59,6 +47,7 @@ impl From<alloc::collections::TryReserveError> for NetpbmError {
   }
 }
 
+/// Header info for a Netpbm file.
 #[derive(Debug, Clone, Copy)]
 pub struct NetpbmHeader {
   /// The tag sets the format of the bytes after the header:
@@ -69,13 +58,16 @@ pub struct NetpbmHeader {
   /// * 5: binary grayscale
   /// * 6: binary rgb
   pub tag: u8,
+  /// Image width
   pub width: u32,
+  /// Image height
   pub height: u32,
   /// Max value per channel entry.
   pub max: u32,
 }
 
 #[inline]
+#[doc(hidden)]
 pub fn netpbm_trim(mut bytes: &[u8]) -> &[u8] {
   'trim: loop {
     match bytes {
@@ -94,14 +86,18 @@ pub fn netpbm_trim(mut bytes: &[u8]) -> &[u8] {
     }
   }
 }
+
 #[inline]
+#[doc(hidden)]
 pub fn netpbm_pull_tag(bytes: &[u8]) -> Result<(u8, &[u8]), NetpbmError> {
   match bytes {
     [b'P', tag, rest @ ..] => Ok((tag.wrapping_sub(b'0'), netpbm_trim(rest))),
     _ => Err(NetpbmError::ParseError),
   }
 }
+
 #[inline]
+#[doc(hidden)]
 pub fn netpbm_pull_ascii_u32(bytes: &[u8]) -> Result<(u32, &[u8]), NetpbmError> {
   let mut it = bytes.splitn(2, |u| !u.is_ascii_digit());
   let digits = it.next().ok_or(NetpbmError::ParseError)?;
@@ -110,6 +106,8 @@ pub fn netpbm_pull_ascii_u32(bytes: &[u8]) -> Result<(u32, &[u8]), NetpbmError> 
   let number = digits_str.parse::<u32>()?;
   Ok((number, netpbm_trim(spare)))
 }
+
+/// Get the header from the Netpbm bytes, as well as the rest of the data.
 #[inline]
 pub fn netpbm_pull_header(bytes: &[u8]) -> Result<(NetpbmHeader, &[u8]), NetpbmError> {
   let (tag, rest) = netpbm_pull_tag(bytes)?;
@@ -128,6 +126,7 @@ pub fn netpbm_pull_header(bytes: &[u8]) -> Result<(NetpbmHeader, &[u8]), NetpbmE
   }
 }
 
+/// Iterate post-header P1 data.
 #[inline]
 pub fn netpbm_iter_p1(mut bytes: &[u8]) -> impl Iterator<Item = bool> + '_ {
   core::iter::from_fn(move || {
@@ -140,6 +139,7 @@ pub fn netpbm_iter_p1(mut bytes: &[u8]) -> impl Iterator<Item = bool> + '_ {
     Some(out)
   })
 }
+/// Iterate post-header P2 data.
 #[inline]
 pub fn netpbm_iter_p2(mut bytes: &[u8]) -> impl Iterator<Item = u32> + '_ {
   core::iter::from_fn(move || {
@@ -148,6 +148,7 @@ pub fn netpbm_iter_p2(mut bytes: &[u8]) -> impl Iterator<Item = u32> + '_ {
     Some(out)
   })
 }
+/// Iterate post-header P3 data.
 #[inline]
 pub fn netpbm_iter_p3(mut bytes: &[u8]) -> impl Iterator<Item = [u32; 3]> + '_ {
   core::iter::from_fn(move || {
@@ -158,6 +159,7 @@ pub fn netpbm_iter_p3(mut bytes: &[u8]) -> impl Iterator<Item = [u32; 3]> + '_ {
     Some([r, g, b])
   })
 }
+/// Iterate post-header P4 data.
 #[inline]
 pub fn netpbm_iter_p4(bytes: &[u8]) -> impl Iterator<Item = bool> + '_ {
   bytes.iter().copied().flat_map(|byte| {
@@ -174,10 +176,12 @@ pub fn netpbm_iter_p4(bytes: &[u8]) -> impl Iterator<Item = bool> + '_ {
     .into_iter()
   })
 }
+/// Iterate post-header P5 data.
 #[inline]
 pub fn netpbm_iter_p5(bytes: &[u8]) -> impl Iterator<Item = u8> + '_ {
   bytes.iter().copied()
 }
+/// Iterate post-header P6 data.
 #[inline]
 pub fn netpbm_iter_p6(mut bytes: &[u8]) -> impl Iterator<Item = [u8; 3]> + '_ {
   core::iter::from_fn(move || {
@@ -192,6 +196,7 @@ pub fn netpbm_iter_p6(mut bytes: &[u8]) -> impl Iterator<Item = [u8; 3]> + '_ {
   })
 }
 
+/// Given the full file bytes, run the closure once for each pixel value listed.
 #[inline]
 pub fn netpbm_for_each_rgb<F: FnMut(r32g32b32_Sfloat)>(bytes: &[u8], f: F) {
   if let Ok((header, rest)) = netpbm_pull_header(bytes) {
@@ -247,8 +252,10 @@ pub fn netpbm_for_each_rgb<F: FnMut(r32g32b32_Sfloat)>(bytes: &[u8], f: F) {
   }
 }
 
-#[cfg(feature = "alloc")]
+/// Automatically allocate and fill in a [Bitmap](crate::image::Bitmap).
 #[inline]
+#[cfg(feature = "alloc")]
+#[cfg_attr(docs_rs, doc(cfg(feature = "alloc")))]
 pub fn netpbm_try_bitmap<P>(bytes: &[u8]) -> Result<crate::image::Bitmap<P>, NetpbmError>
 where
   P: From<r32g32b32_Sfloat>,
