@@ -11,7 +11,7 @@ use ezgl::{
   gl_constants::GL_COLOR_BUFFER_BIT, BufferTarget::*, BufferUsageHint::*, DrawMode, EzGl,
   MagFilter, MinFilter, ShaderType::*, TextureTarget::*, TextureWrap,
 };
-use imagine::image::Bitmap;
+use imagine::{image::Bitmap, netpbm::netpbm_try_bitmap};
 use pixel_formats::{r32g32b32a32_Sfloat, r8g8b8a8_Srgb, r8g8b8a8_Unorm};
 
 const USE_GLES: bool = cfg!(target_arch = "aarch64") || cfg!(target_arch = "arm");
@@ -71,7 +71,7 @@ fn main() {
     Some(image) => image,
     None => match Bitmap::<r8g8b8a8_Unorm>::try_from_bmp_bytes(&bytes).ok() {
       Some(image) => image,
-      None => match Bitmap::<r8g8b8a8_Unorm>::try_from_netpbm_bytes(&bytes).ok() {
+      None => match netpbm_try_bitmap(&bytes).ok() {
         Some(image) => image,
         None => {
           println!("Couldn't parse the file.");
@@ -237,7 +237,7 @@ fn main() {
           println!("got {} bytes.", bytes.len());
           match Bitmap::<r8g8b8a8_Unorm>::try_from_png_bytes(&bytes)
             .or_else(|| Bitmap::<r8g8b8a8_Unorm>::try_from_bmp_bytes(&bytes).ok())
-            .or_else(|| Bitmap::<r8g8b8a8_Unorm>::try_from_netpbm_bytes(&bytes).ok())
+            .or_else(|| netpbm_try_bitmap(&bytes).ok())
           {
             Some(new_image) => {
               if new_image.width <= 1920 && new_image.height <= 1080 {

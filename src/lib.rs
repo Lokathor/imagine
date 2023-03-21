@@ -1,4 +1,6 @@
 #![no_std]
+#![allow(unused_labels)]
+#![allow(clippy::drop_copy)]
 #![cfg_attr(docs_rs, feature(doc_cfg))]
 #![allow(unused_imports)]
 #![warn(missing_docs)]
