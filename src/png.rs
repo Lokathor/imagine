@@ -345,7 +345,7 @@ impl IHDR {
     }
     if self.is_interlaced {
       let mut total = 0_usize;
-      for (width, height) in reduced_image_dimensions(self.width, self.height) {
+      for (width, height) in reduced_image_dimensions(self.width, self.height).into_iter().skip(1) {
         total = total.saturating_add(temp_bytes_for_image(
           width,
           height,
