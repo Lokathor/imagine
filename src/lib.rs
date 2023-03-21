@@ -1,12 +1,12 @@
 #![no_std]
-#![allow(unused_labels)]
-#![allow(clippy::drop_copy)]
-#![cfg_attr(docs_rs, feature(doc_cfg))]
-#![allow(unused_imports)]
 #![warn(missing_docs)]
+#![allow(unused_labels)]
+#![allow(unused_imports)]
+#![allow(clippy::drop_copy)]
+#![allow(clippy::get_first)]
+#![cfg_attr(docs_rs, feature(doc_cfg))]
 #![warn(missing_debug_implementations)]
 #![warn(clippy::missing_inline_in_public_items)]
-#![allow(clippy::get_first)]
 
 //! A crate to work with image data.
 
@@ -27,7 +27,6 @@ pub mod bmp;
 
 #[cfg(feature = "netpbm")]
 #[cfg_attr(docs_rs, doc(cfg(feature = "netpbm")))]
-#[allow(missing_docs)]
 pub mod netpbm;
 
 /// sRGB Intent for an image.
