@@ -126,38 +126,54 @@ where
       return Err(BmpError::WidthOrHeightZero);
     }
 
-    let [r_mask, g_mask, b_mask, a_mask] = match compression {
-      BmpCompression::Bitfields => {
-        const U32X3: usize = size_of::<u32>() * 3;
-        let (a, new_rest) =
-          try_split_off_byte_array::<U32X3>(rest).ok_or(BmpError::InsufficientBytes)?;
-        rest = new_rest;
-        [
-          u32::from_le_bytes(a[0..4].try_into().unwrap()),
-          u32::from_le_bytes(a[4..8].try_into().unwrap()),
-          u32::from_le_bytes(a[8..12].try_into().unwrap()),
-          0,
-        ]
+    let [r_mask, g_mask, b_mask, a_mask] = match info_header {
+      BmpInfoHeader::Core(_) | BmpInfoHeader::Os22x(_) | BmpInfoHeader::V1(_) => {
+        match compression {
+          BmpCompression::Bitfields => {
+            const U32X3: usize = size_of::<u32>() * 3;
+            let (a, new_rest) =
+              try_split_off_byte_array::<U32X3>(rest).ok_or(BmpError::InsufficientBytes)?;
+            rest = new_rest;
+            [
+              u32::from_le_bytes(a[0..4].try_into().unwrap()),
+              u32::from_le_bytes(a[4..8].try_into().unwrap()),
+              u32::from_le_bytes(a[8..12].try_into().unwrap()),
+              0,
+            ]
+          }
+          BmpCompression::AlphaBitfields => {
+            const U32X4: usize = size_of::<u32>() * 4;
+            let (a, new_rest) =
+              try_split_off_byte_array::<U32X4>(rest).ok_or(BmpError::InsufficientBytes)?;
+            rest = new_rest;
+            [
+              u32::from_le_bytes(a[0..4].try_into().unwrap()),
+              u32::from_le_bytes(a[4..8].try_into().unwrap()),
+              u32::from_le_bytes(a[8..12].try_into().unwrap()),
+              u32::from_le_bytes(a[12..16].try_into().unwrap()),
+            ]
+          }
+          // When bitmasks aren't specified, there's default RGB mask values. It
+          // seems to be either 555 (16-bit) or 888 (32-bit).
+          _ => match bits_per_pixel {
+            16 => [0b11111 << 10, 0b11111 << 5, 0b11111, 0],
+            32 => [0b11111111 << 16, 0b11111111 << 8, 0b11111111, 0],
+            _ => [0, 0, 0, 0],
+          },
+        }
       }
-      BmpCompression::AlphaBitfields => {
-        const U32X4: usize = size_of::<u32>() * 4;
-        let (a, new_rest) =
-          try_split_off_byte_array::<U32X4>(rest).ok_or(BmpError::InsufficientBytes)?;
-        rest = new_rest;
-        [
-          u32::from_le_bytes(a[0..4].try_into().unwrap()),
-          u32::from_le_bytes(a[4..8].try_into().unwrap()),
-          u32::from_le_bytes(a[8..12].try_into().unwrap()),
-          u32::from_le_bytes(a[12..16].try_into().unwrap()),
-        ]
+      BmpInfoHeader::V2(BmpInfoHeaderV2 { red_mask, green_mask, blue_mask, .. }) => {
+        [red_mask, green_mask, blue_mask, 0]
       }
-      // When bitmasks aren't specified, there's default RGB mask values based on
-      // the bit depth, either 555 (16-bit) or 888 (32-bit).
-      _ => match bits_per_pixel {
-        16 => [0b11111 << 10, 0b11111 << 5, 0b11111, 0],
-        32 => [0b11111111 << 16, 0b11111111 << 8, 0b11111111, 0],
-        _ => [0, 0, 0, 0],
-      },
+      BmpInfoHeader::V3(BmpInfoHeaderV3 {
+        red_mask, green_mask, blue_mask, alpha_mask, ..
+      }) => [red_mask, green_mask, blue_mask, alpha_mask],
+      BmpInfoHeader::V4(BmpInfoHeaderV4 {
+        red_mask, green_mask, blue_mask, alpha_mask, ..
+      }) => [red_mask, green_mask, blue_mask, alpha_mask],
+      BmpInfoHeader::V5(BmpInfoHeaderV5 {
+        red_mask, green_mask, blue_mask, alpha_mask, ..
+      }) => [red_mask, green_mask, blue_mask, alpha_mask],
     };
 
     // we make our final storage once we know about the masks. if there is a

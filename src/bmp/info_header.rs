@@ -191,18 +191,6 @@ impl BmpInfoHeader {
       }
     }
   }
-
-  pub const fn is_alpha(self) -> bool {
-    match self {
-      BmpInfoHeader::Core(_) => false,
-      BmpInfoHeader::Os22x(_) => false,
-      BmpInfoHeader::V1(_) => false,
-      BmpInfoHeader::V2(_) => false,
-      BmpInfoHeader::V3(_) => todo!(),
-      BmpInfoHeader::V4(_) => todo!(),
-      BmpInfoHeader::V5(_) => todo!(),
-    }
-  }
 }
 
 /// Header for Windows 2.0 and OS/2 1.x images.

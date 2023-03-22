@@ -113,7 +113,7 @@ fn main() {
   // Makes the window with a GL Context.
   let win = sdl
     .create_gl_window(CreateWinArgs {
-      title: "Example GL Window",
+      title: "Example Viewer",
       width: image.width.try_into().unwrap(),
       height: image.height.try_into().unwrap(),
       ..Default::default()
@@ -125,6 +125,7 @@ fn main() {
     unsafe { temp.load(|name| win.get_proc_address(name)) }
     temp
   };
+  #[cfg(FALSE)]
   if cfg!(debug_assertions) && win.supports_extension("GL_KHR_debug") {
     gl.set_stderr_debug_message_callback().ok();
   }
