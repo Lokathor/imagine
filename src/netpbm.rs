@@ -66,6 +66,7 @@ pub struct NetpbmHeader {
   pub max: u32,
 }
 
+/// Trims leading whitespace and comments from the bytes
 #[inline]
 #[doc(hidden)]
 pub fn netpbm_trim(mut bytes: &[u8]) -> &[u8] {
@@ -87,6 +88,7 @@ pub fn netpbm_trim(mut bytes: &[u8]) -> &[u8] {
   }
 }
 
+/// Pulls the tag off the front of the bytes (and trims)
 #[inline]
 #[doc(hidden)]
 pub fn netpbm_pull_tag(bytes: &[u8]) -> Result<(u8, &[u8]), NetpbmError> {
@@ -96,6 +98,7 @@ pub fn netpbm_pull_tag(bytes: &[u8]) -> Result<(u8, &[u8]), NetpbmError> {
   }
 }
 
+/// Pulls an ascii u32 value off the front of the bytes (and trims)
 #[inline]
 #[doc(hidden)]
 pub fn netpbm_pull_ascii_u32(bytes: &[u8]) -> Result<(u32, &[u8]), NetpbmError> {
