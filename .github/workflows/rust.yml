@@ -27,5 +27,7 @@ jobs:
     - run: cargo check --no-default-features --features="png,miniz_oxide"
     - run: cargo check --no-default-features --features="png,miniz_oxide,alloc"
     - run: cargo check --no-default-features --features="bmp"
+    - run: cargo check --no-default-features --features="bmp,alloc"
     - run: cargo check --no-default-features --features="netpbm"
+    - run: cargo check --no-default-features --features="netpbm,alloc"
     - run: cargo test --all-features
