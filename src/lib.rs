@@ -10,6 +10,9 @@
 
 //! A crate to work with image data.
 
+mod ascii_array;
+mod util;
+
 #[cfg(feature = "alloc")]
 extern crate alloc;
 
