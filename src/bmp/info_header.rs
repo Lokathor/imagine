@@ -125,10 +125,10 @@ impl BmpInfoHeader {
 
   /// Gets the number of palette entries.
   ///
-  /// Meaning of a `None` value for the `palette_len` field changes depending on
-  /// the bit depth of the image, so this method handles that difference for you
-  /// and just gives you a single `u32` that's the *actual* number of entries on
-  /// the palette.
+  /// The meaning of a `None` value for the `palette_len` field on the wrapped
+  /// structures changes depending on the bit depth of the image, so this method
+  /// handles that difference for you and just gives you a single value that's
+  /// the *actual* number of entries on the palette.
   #[inline]
   #[must_use]
   pub const fn palette_len(self) -> usize {
@@ -170,6 +170,37 @@ impl BmpInfoHeader {
           height_u.saturating_mul(bytes_per_line_padded)
         }
       },
+    }
+  }
+
+  /// If the image is supposed to be sRGB colors or not.
+  #[inline]
+  pub const fn is_srgb(self) -> bool {
+    match self {
+      BmpInfoHeader::Core(_) => false,
+      BmpInfoHeader::Os22x(_) => false,
+      BmpInfoHeader::V1(_) => false,
+      BmpInfoHeader::V2(_) => false,
+      BmpInfoHeader::V3(_) => false,
+      BmpInfoHeader::V4(BmpInfoHeaderV4 { colorspace, .. }) => {
+        matches!(colorspace, BmpColorspace::Srgb | BmpColorspace::WindowsDefault)
+      }
+      BmpInfoHeader::V5(BmpInfoHeaderV5 { srgb_intent, colorspace, .. }) => {
+        srgb_intent.is_some()
+          || matches!(colorspace, BmpColorspace::Srgb | BmpColorspace::WindowsDefault)
+      }
+    }
+  }
+
+  pub const fn is_alpha(self) -> bool {
+    match self {
+      BmpInfoHeader::Core(_) => false,
+      BmpInfoHeader::Os22x(_) => false,
+      BmpInfoHeader::V1(_) => false,
+      BmpInfoHeader::V2(_) => false,
+      BmpInfoHeader::V3(_) => todo!(),
+      BmpInfoHeader::V4(_) => todo!(),
+      BmpInfoHeader::V5(_) => todo!(),
     }
   }
 }
