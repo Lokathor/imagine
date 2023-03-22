@@ -80,9 +80,15 @@ pub enum BmpError {
   PixelDataIllegalLength,
   PixelDataIllegalRLEContent,
   NotAPalettedBmp,
+  WidthOrHeightZero,
   /// The BMP file might be valid, but either way this library doesn't currently
   /// know how to parse it.
   ParserIncomplete,
+}
+
+pub struct BmpHeader {
+  pub file_header: BmpFileHeader,
+  pub info_header: BmpInfoHeader,
 }
 
 #[cfg(feature = "alloc")]
@@ -116,11 +122,15 @@ where
     let width: usize = info_header.width().unsigned_abs() as usize;
     let height: usize = info_header.height().unsigned_abs() as usize;
     let pixel_count: usize = width.saturating_mul(height);
+    if width == 0 || height == 0 {
+      return Err(BmpError::WidthOrHeightZero);
+    }
 
     let [r_mask, g_mask, b_mask, a_mask] = match compression {
       BmpCompression::Bitfields => {
-        let (a, new_rest) = try_split_off_byte_array::<{ size_of::<u32>() * 3 }>(rest)
-          .ok_or(BmpError::InsufficientBytes)?;
+        const U32X3: usize = size_of::<u32>() * 3;
+        let (a, new_rest) =
+          try_split_off_byte_array::<U32X3>(rest).ok_or(BmpError::InsufficientBytes)?;
         rest = new_rest;
         [
           u32::from_le_bytes(a[0..4].try_into().unwrap()),
@@ -130,8 +140,9 @@ where
         ]
       }
       BmpCompression::AlphaBitfields => {
-        let (a, new_rest) = try_split_off_byte_array::<{ size_of::<u32>() * 4 }>(rest)
-          .ok_or(BmpError::InsufficientBytes)?;
+        const U32X4: usize = size_of::<u32>() * 4;
+        let (a, new_rest) =
+          try_split_off_byte_array::<U32X4>(rest).ok_or(BmpError::InsufficientBytes)?;
         rest = new_rest;
         [
           u32::from_le_bytes(a[0..4].try_into().unwrap()),
@@ -167,7 +178,6 @@ where
       .into(),
     );
 
-    #[allow(unused_assignments)]
     let palette: Vec<r8g8b8a8_Unorm> = match info_header.palette_len() {
       0 => Vec::new(),
       count => {
@@ -176,12 +186,11 @@ where
         match info_header {
           BmpInfoHeader::Core(_) => {
             let bytes_needed = count * size_of::<[u8; 3]>();
-            let (pal_slice, new_rest) = if rest.len() < bytes_needed {
+            let (pal_slice, _) = if rest.len() < bytes_needed {
               return Err(BmpError::InsufficientBytes);
             } else {
               rest.split_at(bytes_needed)
             };
-            rest = new_rest;
             let pal_slice: &[[u8; 3]] = cast_slice(pal_slice);
             for [b, g, r] in pal_slice.iter().copied() {
               v.push(r8g8b8a8_Unorm { r, g, b, a: 0xFF });
@@ -189,12 +198,11 @@ where
           }
           _ => {
             let bytes_needed = count * size_of::<[u8; 4]>();
-            let (pal_slice, new_rest) = if rest.len() < bytes_needed {
+            let (pal_slice, _) = if rest.len() < bytes_needed {
               return Err(BmpError::InsufficientBytes);
             } else {
               rest.split_at(bytes_needed)
             };
-            rest = new_rest;
             let pal_slice: &[[u8; 4]] = cast_slice(pal_slice);
             for [b, g, r, a] in pal_slice.iter().copied() {
               v.push(r8g8b8a8_Unorm { r, g, b, a });
