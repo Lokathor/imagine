@@ -53,7 +53,7 @@
 //! * 24 bits per pixel is direct color and the channel order is always implied
 //!   to be `[b,g,r]` within `[u8; 3]`.
 
-use crate::sRGBIntent;
+use crate::{sRGBIntent, util::*};
 use bytemuck::cast;
 use core::{
   fmt::Write,
@@ -61,10 +61,27 @@ use core::{
 };
 use pixel_formats::r8g8b8a8_Unorm;
 
+mod colorspace;
 mod file_header;
+mod ih_core;
+mod ih_os2;
+mod ih_v1;
+mod ih_v2;
+mod ih_v3;
+mod ih_v4;
+mod ih_v5;
 mod info_header;
 
-pub use self::{file_header::*, info_header::*};
+pub use self::{
+  colorspace::*, file_header::*, ih_core::*, ih_os2::*, ih_v1::*, ih_v2::*, ih_v3::*, ih_v4::*,
+  ih_v5::*, info_header::*,
+};
+
+#[derive(Debug)]
+pub struct BmpHeader {
+  pub file_header: BmpFileHeader,
+  pub info_header: BmpInfoHeader,
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[non_exhaustive]
@@ -86,10 +103,155 @@ pub enum BmpError {
   ParserIncomplete,
 }
 
-pub struct BmpHeader {
-  pub file_header: BmpFileHeader,
-  pub info_header: BmpInfoHeader,
+/// Various possible compression styles for Bmp files.
+///
+/// * Indexed color images *can* use 4 bit RLE, 8 bit RLE, or Huffman 1D.
+/// * `BmpInfoHeaderOs22x` *can* use 24 bit RLE.
+/// * 16bpp and 32bpp images are *always* stored uncompressed.
+/// * Any other image can also be stored uncompressed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum BmpCompression {
+  /// RGB, No compression.
+  RgbNoCompression = 0,
+
+  /// RGB, Run-length encoded, 8bpp
+  RgbRLE8 = 1,
+
+  /// RGB, Run-length encoded, 4bpp
+  RgbRLE4 = 2,
+
+  /// Meaning depends on header:
+  /// * OS/2 2.x: Huffman 1D
+  /// * InfoHeader: The image is not compressed, and following the header
+  ///   there's **three** `u32` bitmasks that let you locate the R, G, and B
+  ///   bits. This should only be used with 16 or 32 bits per pixel bitmaps.
+  Bitfields = 3,
+
+  /// Meaning depends on header:
+  /// * OS/2 2.x: RLE24
+  /// * InfoHeader v4+: A jpeg image
+  Jpeg = 4,
+
+  ///
+  /// * InfoHeader v4+: A png image
+  Png = 5,
+
+  /// The image is not compressed, and following the header
+  /// there's **four** `u32` bitmasks that let you locate the R, G, B, and A
+  /// bits. This should only be used with 16 or 32 bits per pixel bitmaps.
+  AlphaBitfields = 6,
+
+  /// CMYK, No compression.
+  CmykNoCompression = 11,
+
+  /// CMYK, Run-length encoded, 8bpp
+  CmykRLE8 = 12,
+
+  /// CMYK, Run-length encoded, 4bpp
+  CmykRLE4 = 13,
 }
+impl TryFrom<u32> for BmpCompression {
+  type Error = BmpError;
+  #[inline]
+  fn try_from(value: u32) -> Result<Self, Self::Error> {
+    use BmpCompression::*;
+    Ok(match value {
+      0 => RgbNoCompression,
+      1 => RgbRLE8,
+      2 => RgbRLE4,
+      3 => Bitfields,
+      4 => Jpeg,
+      5 => Png,
+      6 => AlphaBitfields,
+      11 => CmykNoCompression,
+      12 => CmykRLE8,
+      13 => CmykRLE4,
+      _ => return Err(BmpError::UnknownCompression),
+    })
+  }
+}
+impl From<BmpCompression> for u32 {
+  #[inline]
+  #[must_use]
+  fn from(c: BmpCompression) -> Self {
+    c as u32
+  }
+}
+
+/// Honestly, I don't know what this is about, but it's in the BMP header.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[allow(missing_docs)]
+pub enum Halftoning {
+  /// No halftoning, the most common style.
+  NoHalftoning,
+
+  /// [wikipedia](https://en.wikipedia.org/wiki/Error_diffusion)
+  ErrorDiffusion {
+    /// 0 indicates that the error is not diffused.
+    damping_percentage: u32,
+  },
+
+  /// PANDA: Processing Algorithm for Noncoded Document Acquisition.
+  Panda {
+    x: u32,
+    y: u32,
+  },
+
+  SuperCircle {
+    x: u32,
+    y: u32,
+  },
+
+  Unknown,
+}
+impl From<[u8; 10]> for Halftoning {
+  #[inline]
+  fn from(a: [u8; 10]) -> Self {
+    use BmpError::*;
+    match u16_le(&a[0..2]) {
+      0 => Halftoning::NoHalftoning,
+      1 => Halftoning::ErrorDiffusion { damping_percentage: u32_le(&a[2..6]) },
+      2 => Halftoning::Panda { x: u32_le(&a[2..6]), y: u32_le(&a[6..10]) },
+      3 => Halftoning::SuperCircle { x: u32_le(&a[2..6]), y: u32_le(&a[6..10]) },
+      _ => Halftoning::Unknown,
+    }
+  }
+}
+impl From<Halftoning> for [u8; 10] {
+  #[inline]
+  fn from(h: Halftoning) -> Self {
+    let mut a = [0; 10];
+    match h {
+      Halftoning::NoHalftoning | Halftoning::Unknown => (),
+      Halftoning::ErrorDiffusion { damping_percentage } => {
+        a[0..2].copy_from_slice(1_u16.to_le_bytes().as_slice());
+        a[2..6].copy_from_slice(damping_percentage.to_le_bytes().as_slice());
+      }
+      Halftoning::Panda { x, y } => {
+        a[0..2].copy_from_slice(2_u16.to_le_bytes().as_slice());
+        a[2..6].copy_from_slice(x.to_le_bytes().as_slice());
+        a[6..10].copy_from_slice(y.to_le_bytes().as_slice());
+      }
+      Halftoning::SuperCircle { x, y } => {
+        a[0..2].copy_from_slice(3_u16.to_le_bytes().as_slice());
+        a[2..6].copy_from_slice(x.to_le_bytes().as_slice());
+        a[6..10].copy_from_slice(y.to_le_bytes().as_slice());
+      }
+    }
+    a
+  }
+}
+
+const LCS_CALIBRATED_RGB: u32 = 0x00000000;
+const LCS_sRGB: u32 = 0x7352_4742;
+/// This is b"Win " in little-endian, I'm not kidding.
+const LCS_WINDOWS_COLOR_SPACE: u32 = 0x5769_6E20;
+const PROFILE_LINKED: u32 = 0x4C49_4E4B;
+const PROFILE_EMBEDDED: u32 = 0x4D42_4544;
+const LCS_GM_ABS_COLORIMETRIC: u32 = 0x00000008;
+const LCS_GM_BUSINESS: u32 = 0x00000001;
+const LCS_GM_GRAPHICS: u32 = 0x00000002;
+const LCS_GM_IMAGES: u32 = 0x00000004;
 
 #[cfg(feature = "alloc")]
 impl<P> crate::image::Bitmap<P>
