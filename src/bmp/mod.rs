@@ -77,10 +77,57 @@ pub use self::{
   ih_v5::*, info_header::*,
 };
 
+/// Header data from a bitmap file.
+///
+/// A full BMP header is split into the "file header" and "info header", and
+/// there's at least 7(?) different versions of the info header. Many fields
+/// exist that only have a single possible value, or that have mostly useless
+/// information (eg: intended physical dimensions of the image).
+///
+/// This structure collects all the important information and gives it a
+/// consistent presentation.
+///
+/// **Alpha:** If the image uses alpha (either "alpha bitfields" compression, or
+/// 32bpp with no compression), the *expectation* is that the color and alpha
+/// channels are pre-multiplied. Not all image editors necessarily do this, so
+/// some files might have straight alpha anyway.
 #[derive(Debug)]
 pub struct BmpHeader {
-  pub file_header: BmpFileHeader,
-  pub info_header: BmpInfoHeader,
+  /// Image width in pixels.
+  pub width: u32,
+
+  /// Image height in pixels.
+  pub height: u32,
+
+  /// Bits per pixel, from 1 to 32.
+  pub bits_per_pixel: usize,
+
+  /// Number of palette entries.
+  ///
+  /// Bit depths greater than 8 won't use a palette.
+  pub palette_len: usize,
+
+  /// The file's compression scheme, if any.
+  pub compression: Option<BmpCompressionStyle>,
+
+  /// The sRGB intent of the image, if any.
+  pub srgb_intent: Option<sRGBIntent>,
+
+  /// If the image's origin is the top left (otherwise it's the bottom left).
+  pub origin_top_left: bool,
+}
+
+/// Compression options for BMP files.
+#[derive(Debug)]
+pub enum BmpCompressionStyle {
+  /// MSDN: [Bitmap Compression](https://learn.microsoft.com/en-us/windows/win32/gdi/bitmap-compression)
+  RunLengthEncoding,
+  /// RGB bitfields
+  #[allow(missing_docs)]
+  Bitfields { red: u32, green: u32, blue: u32 },
+  /// RGBA bitfields
+  #[allow(missing_docs)]
+  AlphaBitfields { red: u32, green: u32, blue: u32, alpha: u32 },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -393,6 +440,7 @@ where
         v
       }
     };
+    //dbg!(file_header, info_header, palette.len());
 
     let pixel_data_start_index: usize = file_header.pixel_data_offset as usize;
     let pixel_data_end_index: usize = pixel_data_start_index + info_header.pixel_data_len();
