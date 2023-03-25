@@ -199,7 +199,9 @@ pub fn netpbm_iter_p6(mut bytes: &[u8]) -> impl Iterator<Item = [u8; 3]> + '_ {
   })
 }
 
-/// Given the full file bytes, run the closure once for each pixel value listed.
+/// Parse the file bytes for a header and then run the `f` given for each pixel.
+///
+/// Pixels will be produced left to right, top to bottom.
 #[inline]
 pub fn netpbm_for_each_rgb<F: FnMut(r32g32b32_Sfloat)>(bytes: &[u8], f: F) {
   if let Ok((header, rest)) = netpbm_pull_header(bytes) {
