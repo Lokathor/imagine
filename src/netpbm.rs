@@ -37,6 +37,23 @@ pub struct NetpbmHeader {
   pub max: u32,
 }
 
+/// Pulls the tag off the front of the bytes
+#[inline]
+#[doc(hidden)]
+pub const fn netpbm_pull_tag(bytes: &[u8]) -> Result<(u8, &[u8]), ImagineError> {
+  match bytes {
+    [b'P', tag, rest @ ..] => Ok((tag.wrapping_sub(b'0'), rest)),
+    _ => Err(ImagineError::ParseError),
+  }
+}
+
+/// Trims to a `'\n'`, but not past that.
+fn trim_to_eol(bytes: &[u8]) -> &[u8] {
+  let mut it = bytes.splitn(2, |&u| u == b'\n');
+  drop(it.next());
+  it.next().unwrap_or(&[])
+}
+
 /// Trims leading whitespace and comments from the bytes
 #[inline]
 #[doc(hidden)]
@@ -47,11 +64,7 @@ pub fn netpbm_trim(mut bytes: &[u8]) -> &[u8] {
       [u, tail @ ..] if u.is_ascii_whitespace() => bytes = tail,
 
       // trim single-line comment
-      [b'#', tail @ ..] => {
-        let mut it = tail.splitn(2, |&u| u == b'\n');
-        drop(it.next());
-        bytes = it.next().unwrap_or(&[]);
-      }
+      [b'#', tail @ ..] => bytes = trim_to_eol(tail),
 
       // now we're done
       _ => return bytes,
@@ -59,17 +72,7 @@ pub fn netpbm_trim(mut bytes: &[u8]) -> &[u8] {
   }
 }
 
-/// Pulls the tag off the front of the bytes (and trims)
-#[inline]
-#[doc(hidden)]
-pub fn netpbm_pull_tag(bytes: &[u8]) -> Result<(u8, &[u8]), ImagineError> {
-  match bytes {
-    [b'P', tag, rest @ ..] => Ok((tag.wrapping_sub(b'0'), netpbm_trim(rest))),
-    _ => Err(ImagineError::ParseError),
-  }
-}
-
-/// Pulls an ascii u32 value off the front of the bytes (and trims)
+/// Pulls an ascii u32 value off the front of the bytes
 #[inline]
 #[doc(hidden)]
 pub fn netpbm_pull_ascii_u32(bytes: &[u8]) -> Result<(u32, &[u8]), ImagineError> {
@@ -78,7 +81,7 @@ pub fn netpbm_pull_ascii_u32(bytes: &[u8]) -> Result<(u32, &[u8]), ImagineError>
   let spare = it.next().ok_or(ImagineError::ParseError)?;
   let digits_str = from_utf8(digits)?;
   let number = digits_str.parse::<u32>()?;
-  Ok((number, netpbm_trim(spare)))
+  Ok((number, spare))
 }
 
 /// Get the header from the Netpbm bytes, as well as the rest of the data.
@@ -88,16 +91,23 @@ pub fn netpbm_pull_header(bytes: &[u8]) -> Result<(NetpbmHeader, &[u8]), Imagine
   if !(1..=6).contains(&tag) {
     return Err(ImagineError::ParseError);
   }
-  let (width, rest) = netpbm_pull_ascii_u32(rest)?;
-  let (height, rest) = netpbm_pull_ascii_u32(rest)?;
-  match tag {
-    1 | 4 => Ok((NetpbmHeader { tag, width, height, max: 1 }, rest)),
-    2 | 3 | 5 | 6 => {
+  let (width, rest) = netpbm_pull_ascii_u32(netpbm_trim(rest))?;
+  let (height, rest) = netpbm_pull_ascii_u32(netpbm_trim(rest))?;
+  Ok(match tag {
+    // ascii paths use a full trim
+    1 => (NetpbmHeader { tag, width, height, max: 1 }, netpbm_trim(rest)),
+    2 | 3 => {
       let (max, rest) = netpbm_pull_ascii_u32(rest)?;
-      Ok((NetpbmHeader { tag, width, height, max }, rest))
+      (NetpbmHeader { tag, width, height, max }, rest)
+    }
+    // binary paths must only trim to the end of the current line
+    4 => (NetpbmHeader { tag, width, height, max: 1 }, trim_to_eol(rest)),
+    5 | 6 => {
+      let (max, rest) = netpbm_pull_ascii_u32(rest)?;
+      (NetpbmHeader { tag, width, height, max }, trim_to_eol(rest))
     }
     _ => unreachable!(),
-  }
+  })
 }
 
 /// Iterate post-header P1 data.
