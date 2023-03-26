@@ -53,7 +53,7 @@
 //! * 24 bits per pixel is direct color and the channel order is always implied
 //!   to be `[b,g,r]` within `[u8; 3]`.
 
-use crate::{sRGBIntent, util::*};
+use crate::{bmp2::bmp_get_header, sRGBIntent, util::*};
 use bytemuck::cast;
 use core::{
   fmt::Write,
@@ -281,7 +281,7 @@ where
     if width == 0 || height == 0 {
       return Err(BmpError::WidthOrHeightZero);
     }
-    dbg!(info_header);
+    dbg!(info_header, bmp_get_header(bytes).ok());
 
     let [r_mask, g_mask, b_mask, a_mask] = match info_header {
       BmpInfoHeader::Core(_) | BmpInfoHeader::Os22x(_) | BmpInfoHeader::V1(_) => {
