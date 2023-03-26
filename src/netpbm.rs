@@ -97,8 +97,8 @@ pub fn netpbm_pull_header(bytes: &[u8]) -> Result<(NetpbmHeader, &[u8]), Imagine
     // ascii paths use a full trim
     1 => (NetpbmHeader { tag, width, height, max: 1 }, netpbm_trim(rest)),
     2 | 3 => {
-      let (max, rest) = netpbm_pull_ascii_u32(rest)?;
-      (NetpbmHeader { tag, width, height, max }, rest)
+      let (max, rest) = netpbm_pull_ascii_u32(netpbm_trim(rest))?;
+      (NetpbmHeader { tag, width, height, max }, netpbm_trim(rest))
     }
     // binary paths must only trim to the end of the current line
     4 => (NetpbmHeader { tag, width, height, max: 1 }, trim_to_eol(rest)),

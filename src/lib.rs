@@ -1,4 +1,4 @@
-#![no_std]
+//#![no_std]
 #![warn(missing_docs)]
 #![allow(unused_labels)]
 #![allow(unused_imports)]
@@ -31,6 +31,10 @@ pub mod png;
 #[cfg(feature = "bmp")]
 #[cfg_attr(docs_rs, doc(cfg(feature = "bmp")))]
 pub mod bmp;
+
+#[cfg(feature = "bmp")]
+#[cfg_attr(docs_rs, doc(cfg(feature = "bmp")))]
+pub mod bmp2;
 
 #[cfg(feature = "netpbm")]
 #[cfg_attr(docs_rs, doc(cfg(feature = "netpbm")))]

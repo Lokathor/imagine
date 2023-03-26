@@ -43,6 +43,15 @@ impl<P> Bitmap<P> {
   /// Flips the image top to bottom.
   #[inline]
   pub fn vertical_flip(&mut self) {
+    debug_assert_eq!(
+      (self.width * self.height) as usize,
+      self.pixels.len(),
+      "dimension are ({width},{height}), but buffer is {len} (should be {expected})",
+      width = self.width,
+      height = self.height,
+      len = self.pixels.len(),
+      expected = self.width * self.height,
+    );
     let mut data: &mut [P] = self.pixels.as_mut_slice();
     let mut temp_height = self.height;
     while temp_height > 1 {

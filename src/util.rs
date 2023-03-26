@@ -1,12 +1,16 @@
 use core::num::{NonZeroU16, NonZeroU32};
 
-pub(crate) fn try_split_off_byte_array<const N: usize>(bytes: &[u8]) -> Option<([u8; N], &[u8])> {
+use crate::ImagineError;
+
+pub(crate) fn try_pull_byte_array<const N: usize>(
+  bytes: &[u8],
+) -> Result<([u8; N], &[u8]), ImagineError> {
   if bytes.len() >= N {
     let (head, tail) = bytes.split_at(N);
     let a: [u8; N] = head.try_into().unwrap();
-    Some((a, tail))
+    Ok((a, tail))
   } else {
-    None
+    Err(ImagineError::ParseError)
   }
 }
 

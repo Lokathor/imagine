@@ -28,12 +28,8 @@ mod trns;
 pub use self::{bkgd::*, idat::*, ihdr::*, plte::*, png_chunk::*, raw_chunk::*, trns::*};
 
 /// Checks if the PNG's initial 8 bytes are correct.
-///
-/// * If this is the case, the rest of the bytes are very likely PNG data.
-/// * If this is *not* the case, the rest of the bytes are very likely *not* PNG
-///   data.
 #[inline]
-pub const fn png_header_is_correct(bytes: &[u8]) -> bool {
+pub const fn png_signature_is_correct(bytes: &[u8]) -> bool {
   matches!(bytes, [137, 80, 78, 71, 13, 10, 26, 10, ..])
 }
 

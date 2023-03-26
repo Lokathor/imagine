@@ -63,7 +63,7 @@ impl BmpFileHeader {
   /// The bytes from here should be used to get the [BmpInfoHeader].
   #[inline]
   pub fn try_from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), BmpError> {
-    let (a, rest) = try_split_off_byte_array::<14>(bytes).ok_or(BmpError::InsufficientBytes)?;
+    let (a, rest) = try_pull_byte_array::<14>(bytes).ok_or(BmpError::InsufficientBytes)?;
     Ok((Self::from(a), rest))
   }
 }

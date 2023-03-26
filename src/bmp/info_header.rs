@@ -23,37 +23,37 @@ impl BmpInfoHeader {
     }
     Ok(match u32_le(&bytes[0..4]) {
       12 => {
-        let (a, rest) = try_split_off_byte_array::<12>(bytes).ok_or(BmpError::InsufficientBytes)?;
+        let (a, rest) = try_pull_byte_array::<12>(bytes).ok().ok_or(BmpError::InsufficientBytes)?;
         (Self::Core(BmpInfoHeaderCore::try_from(a)?), rest)
       }
       16 => {
-        let (a, rest) = try_split_off_byte_array::<16>(bytes).ok_or(BmpError::InsufficientBytes)?;
+        let (a, rest) = try_pull_byte_array::<16>(bytes).ok().ok_or(BmpError::InsufficientBytes)?;
         (Self::Os22x(BmpInfoHeaderOs22x::try_from(a)?), rest)
       }
       64 => {
-        let (a, rest) = try_split_off_byte_array::<64>(bytes).ok_or(BmpError::InsufficientBytes)?;
+        let (a, rest) = try_pull_byte_array::<64>(bytes).ok().ok_or(BmpError::InsufficientBytes)?;
         (Self::Os22x(BmpInfoHeaderOs22x::try_from(a)?), rest)
       }
       40 => {
-        let (a, rest) = try_split_off_byte_array::<40>(bytes).ok_or(BmpError::InsufficientBytes)?;
+        let (a, rest) = try_pull_byte_array::<40>(bytes).ok().ok_or(BmpError::InsufficientBytes)?;
         (Self::V1(BmpInfoHeaderV1::try_from(a)?), rest)
       }
       52 => {
-        let (a, rest) = try_split_off_byte_array::<52>(bytes).ok_or(BmpError::InsufficientBytes)?;
+        let (a, rest) = try_pull_byte_array::<52>(bytes).ok().ok_or(BmpError::InsufficientBytes)?;
         (Self::V2(BmpInfoHeaderV2::try_from(a)?), rest)
       }
       56 => {
-        let (a, rest) = try_split_off_byte_array::<56>(bytes).ok_or(BmpError::InsufficientBytes)?;
+        let (a, rest) = try_pull_byte_array::<56>(bytes).ok().ok_or(BmpError::InsufficientBytes)?;
         (Self::V3(BmpInfoHeaderV3::try_from(a)?), rest)
       }
       108 => {
         let (a, rest) =
-          try_split_off_byte_array::<108>(bytes).ok_or(BmpError::InsufficientBytes)?;
+          try_pull_byte_array::<108>(bytes).ok().ok_or(BmpError::InsufficientBytes)?;
         (Self::V4(BmpInfoHeaderV4::try_from(a)?), rest)
       }
       124 => {
         let (a, rest) =
-          try_split_off_byte_array::<124>(bytes).ok_or(BmpError::InsufficientBytes)?;
+          try_pull_byte_array::<124>(bytes).ok().ok_or(BmpError::InsufficientBytes)?;
         (Self::V5(BmpInfoHeaderV5::try_from(a)?), rest)
       }
       _ => return Err(BmpError::UnknownHeaderLength),
