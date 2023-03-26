@@ -12,7 +12,10 @@
 //! A crate to work with image data.
 
 mod ascii_array;
+mod error;
 mod util;
+
+pub use error::*;
 
 #[cfg(feature = "alloc")]
 extern crate alloc;

@@ -16,36 +16,7 @@ use core::{
 };
 use pixel_formats::r32g32b32_Sfloat;
 
-/// An error during Netpbm parsing.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum NetpbmError {
-  /// Couldn't allocate space for the bitmap.
-  #[cfg(feature = "alloc")]
-  AllocError,
-  /// Failed to parse the bytes.
-  ParseError,
-  /// The tag value parsed wasn't in the supported range of `1..=6`
-  TagError,
-}
-impl From<Utf8Error> for NetpbmError {
-  #[inline]
-  fn from(_: Utf8Error) -> Self {
-    NetpbmError::ParseError
-  }
-}
-impl From<ParseIntError> for NetpbmError {
-  #[inline]
-  fn from(_: ParseIntError) -> Self {
-    NetpbmError::ParseError
-  }
-}
-#[cfg(feature = "alloc")]
-impl From<alloc::collections::TryReserveError> for NetpbmError {
-  #[inline]
-  fn from(_: alloc::collections::TryReserveError) -> Self {
-    NetpbmError::AllocError
-  }
-}
+use crate::ImagineError;
 
 /// Header info for a Netpbm file.
 #[derive(Debug, Clone, Copy)]
@@ -91,20 +62,20 @@ pub fn netpbm_trim(mut bytes: &[u8]) -> &[u8] {
 /// Pulls the tag off the front of the bytes (and trims)
 #[inline]
 #[doc(hidden)]
-pub fn netpbm_pull_tag(bytes: &[u8]) -> Result<(u8, &[u8]), NetpbmError> {
+pub fn netpbm_pull_tag(bytes: &[u8]) -> Result<(u8, &[u8]), ImagineError> {
   match bytes {
     [b'P', tag, rest @ ..] => Ok((tag.wrapping_sub(b'0'), netpbm_trim(rest))),
-    _ => Err(NetpbmError::ParseError),
+    _ => Err(ImagineError::ParseError),
   }
 }
 
 /// Pulls an ascii u32 value off the front of the bytes (and trims)
 #[inline]
 #[doc(hidden)]
-pub fn netpbm_pull_ascii_u32(bytes: &[u8]) -> Result<(u32, &[u8]), NetpbmError> {
+pub fn netpbm_pull_ascii_u32(bytes: &[u8]) -> Result<(u32, &[u8]), ImagineError> {
   let mut it = bytes.splitn(2, |u| !u.is_ascii_digit());
-  let digits = it.next().ok_or(NetpbmError::ParseError)?;
-  let spare = it.next().ok_or(NetpbmError::ParseError)?;
+  let digits = it.next().ok_or(ImagineError::ParseError)?;
+  let spare = it.next().ok_or(ImagineError::ParseError)?;
   let digits_str = from_utf8(digits)?;
   let number = digits_str.parse::<u32>()?;
   Ok((number, netpbm_trim(spare)))
@@ -112,10 +83,10 @@ pub fn netpbm_pull_ascii_u32(bytes: &[u8]) -> Result<(u32, &[u8]), NetpbmError> 
 
 /// Get the header from the Netpbm bytes, as well as the rest of the data.
 #[inline]
-pub fn netpbm_pull_header(bytes: &[u8]) -> Result<(NetpbmHeader, &[u8]), NetpbmError> {
+pub fn netpbm_pull_header(bytes: &[u8]) -> Result<(NetpbmHeader, &[u8]), ImagineError> {
   let (tag, rest) = netpbm_pull_tag(bytes)?;
   if !(1..=6).contains(&tag) {
-    return Err(NetpbmError::TagError);
+    return Err(ImagineError::ParseError);
   }
   let (width, rest) = netpbm_pull_ascii_u32(rest)?;
   let (height, rest) = netpbm_pull_ascii_u32(rest)?;
@@ -261,7 +232,7 @@ pub fn netpbm_for_each_rgb<F: FnMut(r32g32b32_Sfloat)>(bytes: &[u8], f: F) {
 #[inline]
 #[cfg(feature = "alloc")]
 #[cfg_attr(docs_rs, doc(cfg(feature = "alloc")))]
-pub fn netpbm_try_bitmap<P>(bytes: &[u8]) -> Result<crate::image::Bitmap<P>, NetpbmError>
+pub fn netpbm_try_bitmap<P>(bytes: &[u8]) -> Result<crate::image::Bitmap<P>, ImagineError>
 where
   P: From<r32g32b32_Sfloat>,
 {
