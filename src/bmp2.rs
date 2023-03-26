@@ -138,7 +138,7 @@ pub fn bmp_get_header(bytes: &[u8]) -> Result<BmpHeader, ImagineError> {
             start + {
               let width_u: usize = header.width.try_into().unwrap();
               let height_u: usize = header.height.try_into().unwrap();
-              let bits_per_line = width_u.saturating_mul(header.bits_per_pixel.try_into().unwrap());
+              let bits_per_line = width_u.saturating_mul(header.bits_per_pixel);
               let bytes_per_line_no_padding =
                 (bits_per_line / 8) + usize::from((bits_per_line % 8) != 0);
               let bytes_per_line_padded = ((bytes_per_line_no_padding / 4)
@@ -154,7 +154,7 @@ pub fn bmp_get_header(bytes: &[u8]) -> Result<BmpHeader, ImagineError> {
       header
     }
     124 => {
-      let (a, rest) = try_pull_byte_array::<40>(rest)?;
+      let (a, _rest) = try_pull_byte_array::<124>(rest)?;
       header.width = i32_le(&a[4..8]).unsigned_abs();
       header.height = i32_le(&a[8..12]).unsigned_abs();
       header.origin_top_left = i32_le(&a[8..12]).is_negative();
@@ -176,22 +176,26 @@ pub fn bmp_get_header(bytes: &[u8]) -> Result<BmpHeader, ImagineError> {
         }),
         _ => return Err(ImagineError::ParseError),
       };
-      let num_palette_entries: usize = onz_u32_le(&a[32..36])
-        .map(NonZeroU32::get)
-        .unwrap_or(if header.bits_per_pixel < 8 { 1 << header.bits_per_pixel } else { 0 })
-        .try_into()
-        .unwrap();
-      if num_palette_entries > 0 {
-        let low = SIZE_OF_FILE_HEADER
-          + 40
-          + match header.compression {
-            Some(BmpCompression::Bitfields { .. }) => 12,
-            Some(BmpCompression::AlphaBitfields { .. }) => 16,
-            _ => 0,
-          };
-        let high = 4 * num_palette_entries;
-        header.palette_span = Some((low, high));
-      }
+      header.palette_span = {
+        let num_palette_entries: usize = onz_u32_le(&a[32..36])
+          .map(NonZeroU32::get)
+          .unwrap_or(if header.bits_per_pixel < 8 { 1 << header.bits_per_pixel } else { 0 })
+          .try_into()
+          .unwrap();
+        if num_palette_entries > 0 {
+          let low = SIZE_OF_FILE_HEADER
+            + 40
+            + match header.compression {
+              Some(BmpCompression::Bitfields { .. }) => 12,
+              Some(BmpCompression::AlphaBitfields { .. }) => 16,
+              _ => 0,
+            };
+          let high = 4 * num_palette_entries;
+          Some((low, high))
+        } else {
+          None
+        }
+      };
       header.image_span = {
         let start = u32_le(&bytes[10..14]).try_into().unwrap();
         let end = match onz_u32_le(&a[20..24]) {
@@ -199,7 +203,7 @@ pub fn bmp_get_header(bytes: &[u8]) -> Result<BmpHeader, ImagineError> {
             start + {
               let width_u: usize = header.width.try_into().unwrap();
               let height_u: usize = header.height.try_into().unwrap();
-              let bits_per_line = width_u.saturating_mul(header.bits_per_pixel.try_into().unwrap());
+              let bits_per_line = width_u.saturating_mul(header.bits_per_pixel);
               let bytes_per_line_no_padding =
                 (bits_per_line / 8) + usize::from((bits_per_line % 8) != 0);
               let bytes_per_line_padded = ((bytes_per_line_no_padding / 4)
