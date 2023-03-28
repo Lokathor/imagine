@@ -14,7 +14,7 @@ default = ["alloc", "miniz_oxide", "png", "bmp", "netpbm"]
 alloc = []
 png = [] # Portable Network Graphics
 bmp = [] # Windows Bitmap
-netpbm = ["wide"] # Covers all the Netpbm files: pbm, pgm, ppm, pnm, pam
+netpbm = [] # Covers all the Netpbm files: pbm, pgm, ppm, pnm, pam
 
 [dependencies]
 pixel_formats = "0.1.3"

@@ -4,6 +4,7 @@ use core::num::{NonZeroU32, NonZeroU8};
 
 use bitfrob::{U8BitIterHigh, U8BitIterLow};
 use bytemuck::{cast_slice, try_cast_slice};
+use pixel_formats::{r32g32b32_Sfloat, r32g32b32a32_Sfloat, r8g8b8_Srgb, r8g8b8a8_Srgb};
 
 use crate::{sRGBIntent, util::*, ImagineError};
 
@@ -466,4 +467,160 @@ pub fn bmp_iter_bgr24(image_bytes: &[u8]) -> impl Iterator<Item = [u8; 3]> + '_ 
   bgr.iter().copied()
 }
 
-// TODO: 16 and 32 bit bitmasks
+/// Iterates 16-bits-per-pixel values using the RGB bitmasks given.
+#[inline]
+pub fn bmp_iter_bitmask16_rgb(
+  image_bytes: &[u8], r_mask: u32, g_mask: u32, b_mask: u32,
+) -> impl Iterator<Item = r32g32b32_Sfloat> + '_ {
+  let u16_le_bytes: &[[u8; 2]] = cast_slice(image_bytes);
+  let r_shift = r_mask.trailing_zeros();
+  let g_shift = g_mask.trailing_zeros();
+  let b_shift = b_mask.trailing_zeros();
+  let r_max = r_mask >> r_shift;
+  let g_max = g_mask >> g_shift;
+  let b_max = b_mask >> b_shift;
+  let r_max_f32 = r_max as f32;
+  let g_max_f32 = g_max as f32;
+  let b_max_f32 = b_max as f32;
+  u16_le_bytes.iter().copied().map(move |bytes| {
+    let u = u32::from(u16::from_le_bytes(bytes));
+    let r_bits = (u & r_mask) >> r_shift;
+    let g_bits = (u & g_mask) >> g_shift;
+    let b_bits = (u & b_mask) >> b_shift;
+    let r = (r_bits as f32) / r_max_f32;
+    let g = (g_bits as f32) / g_max_f32;
+    let b = (b_bits as f32) / b_max_f32;
+    r32g32b32_Sfloat { r, g, b }
+  })
+}
+
+/// Iterates 16-bits-per-pixel values using the RGBA bitmasks given.
+#[inline]
+pub fn bmp_iter_bitmask16_rgba(
+  image_bytes: &[u8], r_mask: u32, g_mask: u32, b_mask: u32, a_mask: u32,
+) -> impl Iterator<Item = r32g32b32a32_Sfloat> + '_ {
+  let u16_le_bytes: &[[u8; 2]] = cast_slice(image_bytes);
+  let r_shift = r_mask.trailing_zeros();
+  let g_shift = g_mask.trailing_zeros();
+  let b_shift = b_mask.trailing_zeros();
+  let a_shift = a_mask.trailing_zeros();
+  let r_max = r_mask >> r_shift;
+  let g_max = g_mask >> g_shift;
+  let b_max = b_mask >> b_shift;
+  let a_max = a_mask >> a_shift;
+  let r_max_f32 = r_max as f32;
+  let g_max_f32 = g_max as f32;
+  let b_max_f32 = b_max as f32;
+  let a_max_f32 = a_max as f32;
+  u16_le_bytes.iter().copied().map(move |bytes| {
+    let u = u32::from(u16::from_le_bytes(bytes));
+    let r_bits = (u & r_mask) >> r_shift;
+    let g_bits = (u & g_mask) >> g_shift;
+    let b_bits = (u & b_mask) >> b_shift;
+    let a_bits = (u & a_mask) >> a_shift;
+    let r = (r_bits as f32) / r_max_f32;
+    let g = (g_bits as f32) / g_max_f32;
+    let b = (b_bits as f32) / b_max_f32;
+    let a = (a_bits as f32) / a_max_f32;
+    r32g32b32a32_Sfloat { r, g, b, a }
+  })
+}
+
+/// Iterates 32-bits-per-pixel linear values using the RGB bitmasks given.
+#[inline]
+pub fn bmp_iter_bitmask32_linear_rgb(
+  image_bytes: &[u8], r_mask: u32, g_mask: u32, b_mask: u32,
+) -> impl Iterator<Item = r32g32b32_Sfloat> + '_ {
+  let u32_le_bytes: &[[u8; 4]] = cast_slice(image_bytes);
+  let r_shift = r_mask.trailing_zeros();
+  let g_shift = g_mask.trailing_zeros();
+  let b_shift = b_mask.trailing_zeros();
+  let r_max = r_mask >> r_shift;
+  let g_max = g_mask >> g_shift;
+  let b_max = b_mask >> b_shift;
+  let r_max_f32 = r_max as f32;
+  let g_max_f32 = g_max as f32;
+  let b_max_f32 = b_max as f32;
+  u32_le_bytes.iter().copied().map(move |bytes| {
+    let u = u32::from_le_bytes(bytes);
+    let r_bits = (u & r_mask) >> r_shift;
+    let g_bits = (u & g_mask) >> g_shift;
+    let b_bits = (u & b_mask) >> b_shift;
+    let r = (r_bits as f32) / r_max_f32;
+    let g = (g_bits as f32) / g_max_f32;
+    let b = (b_bits as f32) / b_max_f32;
+    r32g32b32_Sfloat { r, g, b }
+  })
+}
+
+/// Iterates 32-bits-per-pixel linear values using the RGBA bitmasks given.
+#[inline]
+pub fn bmp_iter_bitmask32_linear_rgba(
+  image_bytes: &[u8], r_mask: u32, g_mask: u32, b_mask: u32, a_mask: u32,
+) -> impl Iterator<Item = r32g32b32a32_Sfloat> + '_ {
+  let u32_le_bytes: &[[u8; 4]] = cast_slice(image_bytes);
+  let r_shift = r_mask.trailing_zeros();
+  let g_shift = g_mask.trailing_zeros();
+  let b_shift = b_mask.trailing_zeros();
+  let a_shift = a_mask.trailing_zeros();
+  let r_max_f32 = (r_mask >> r_shift) as f32;
+  let g_max_f32 = (g_mask >> g_shift) as f32;
+  let b_max_f32 = (b_mask >> b_shift) as f32;
+  let a_max_f32 = (a_mask >> a_shift) as f32;
+  u32_le_bytes.iter().copied().map(move |bytes| {
+    let u = u32::from_le_bytes(bytes);
+    let r_bits = (u & r_mask) >> r_shift;
+    let g_bits = (u & g_mask) >> g_shift;
+    let b_bits = (u & b_mask) >> b_shift;
+    let a_bits = (u & a_mask) >> a_shift;
+    let r = (r_bits as f32) / r_max_f32;
+    let g = (g_bits as f32) / g_max_f32;
+    let b = (b_bits as f32) / b_max_f32;
+    let a = (a_bits as f32) / a_max_f32;
+    r32g32b32a32_Sfloat { r, g, b, a }
+  })
+}
+
+/// Iterates 32-bits-per-pixel sRGB using the RGB bitmasks given.
+///
+/// It's assumed that each mask is 8 bits big, results will be weird if this is
+/// not the case.
+#[inline]
+pub fn bmp_iter_bitmask32_srgb(
+  image_bytes: &[u8], r_mask: u32, g_mask: u32, b_mask: u32,
+) -> impl Iterator<Item = r8g8b8_Srgb> + '_ {
+  let u32_le_bytes: &[[u8; 4]] = cast_slice(image_bytes);
+  let r_shift = r_mask.trailing_zeros();
+  let g_shift = g_mask.trailing_zeros();
+  let b_shift = b_mask.trailing_zeros();
+  u32_le_bytes.iter().copied().map(move |bytes| {
+    let u = u32::from_le_bytes(bytes);
+    let r = ((u & r_mask) >> r_shift) as u8;
+    let g = ((u & g_mask) >> g_shift) as u8;
+    let b = ((u & b_mask) >> b_shift) as u8;
+    r8g8b8_Srgb { r, g, b }
+  })
+}
+
+/// Iterates 32-bits-per-pixel sRGBA using the RGBA bitmasks given.
+///
+/// It's assumed that each mask is 8 bits big, results will be weird if this is
+/// not the case.
+#[inline]
+pub fn bmp_iter_bitmask32_srgba(
+  image_bytes: &[u8], r_mask: u32, g_mask: u32, b_mask: u32, a_mask: u32,
+) -> impl Iterator<Item = r8g8b8a8_Srgb> + '_ {
+  let u32_le_bytes: &[[u8; 4]] = cast_slice(image_bytes);
+  let r_shift = r_mask.trailing_zeros();
+  let g_shift = g_mask.trailing_zeros();
+  let b_shift = b_mask.trailing_zeros();
+  let a_shift = a_mask.trailing_zeros();
+  u32_le_bytes.iter().copied().map(move |bytes| {
+    let u = u32::from_le_bytes(bytes);
+    let r = ((u & r_mask) >> r_shift) as u8;
+    let g = ((u & g_mask) >> g_shift) as u8;
+    let b = ((u & b_mask) >> b_shift) as u8;
+    let a = ((u & a_mask) >> a_shift) as u8;
+    r8g8b8a8_Srgb { r, g, b, a }
+  })
+}
