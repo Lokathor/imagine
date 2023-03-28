@@ -1,7 +1,9 @@
-use core::num::{NonZeroU16, NonZeroU32};
+#![allow(dead_code)]
 
 use crate::ImagineError;
+use core::num::{NonZeroU16, NonZeroU32};
 
+#[inline]
 pub(crate) fn try_pull_byte_array<const N: usize>(
   bytes: &[u8],
 ) -> Result<([u8; N], &[u8]), ImagineError> {
@@ -10,7 +12,7 @@ pub(crate) fn try_pull_byte_array<const N: usize>(
     let a: [u8; N] = head.try_into().unwrap();
     Ok((a, tail))
   } else {
-    Err(ImagineError::ParseError)
+    Err(ImagineError::Parse)
   }
 }
 

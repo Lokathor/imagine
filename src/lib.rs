@@ -1,4 +1,4 @@
-//#![no_std]
+#![no_std]
 #![warn(missing_docs)]
 #![allow(unused_labels)]
 #![allow(unused_imports)]
@@ -32,10 +32,6 @@ pub mod png;
 #[cfg_attr(docs_rs, doc(cfg(feature = "bmp")))]
 pub mod bmp;
 
-#[cfg(feature = "bmp")]
-#[cfg_attr(docs_rs, doc(cfg(feature = "bmp")))]
-pub mod bmp2;
-
 #[cfg(feature = "netpbm")]
 #[cfg_attr(docs_rs, doc(cfg(feature = "netpbm")))]
 pub mod netpbm;
@@ -52,4 +48,37 @@ pub enum sRGBIntent {
   RelativeColorimetric,
   Saturation,
   AbsoluteColorimetric,
+}
+
+/// Automatically allocate and fill in a [Bitmap](crate::image::Bitmap).
+///
+/// This will try every format compiled into the library until one of them
+/// works, or will return a parse error if no format works. The order of trying
+/// each format is unspecified, but that basically doesn't matter because you
+/// can't really have a file that successfully parses as more than one format at
+/// the same time.
+///
+/// The output image will automatically be vertically flipped as necessary to
+/// respect the `origin_top_left` value given.
+#[inline]
+#[cfg(feature = "alloc")]
+#[cfg_attr(docs_rs, doc(cfg(feature = "alloc")))]
+pub fn try_bitmap_rgba<P>(
+  bytes: &[u8], origin_top_left: bool,
+) -> Result<crate::image::Bitmap<P>, ImagineError>
+where
+  P: Copy + From<pixel_formats::r32g32b32a32_Sfloat>,
+{
+  #[cfg(feature = "bmp")]
+  if let Ok(bitmap) = bmp::bmp_try_bitmap_rgba(bytes, origin_top_left) {
+    return Ok(bitmap);
+  }
+  #[cfg(feature = "netpbm")]
+  if let Ok(mut bitmap) = netpbm::netpbm_try_bitmap_rgba(bytes) {
+    if !origin_top_left {
+      bitmap.vertical_flip()
+    }
+    return Ok(bitmap);
+  }
+  Err(ImagineError::Parse)
 }

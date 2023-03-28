@@ -1,4 +1,5 @@
 use core::mem::size_of;
+use std::ffi::OsStr;
 
 use beryllium::{
   events::Event,
@@ -9,10 +10,10 @@ use beryllium::{
 use bytemuck::cast_slice;
 use ezgl::{
   gl_constants::GL_COLOR_BUFFER_BIT, BufferTarget::*, BufferUsageHint::*, DrawMode, EzGl,
-  MagFilter, MinFilter, ShaderType::*, TextureTarget::*, TextureWrap,
+  MagFilter, MinFilter, TextureTarget::*, TextureWrap,
 };
-use imagine::{image::Bitmap, netpbm::netpbm_try_bitmap};
-use pixel_formats::{r32g32b32a32_Sfloat, r8g8b8a8_Srgb, r8g8b8a8_Unorm};
+use imagine::{image::Bitmap, try_bitmap_rgba};
+use pixel_formats::*;
 
 const USE_GLES: bool = cfg!(target_arch = "aarch64") || cfg!(target_arch = "arm");
 
@@ -67,20 +68,7 @@ fn main() {
   };
 
   // THIS IS THE COOL PART WHERE WE'RE USING THE LIBRARY TO PARSE A FILE
-  let mut image = match Bitmap::<r8g8b8a8_Unorm>::try_from_png_bytes(&bytes) {
-    Some(image) => image,
-    None => match Bitmap::<r8g8b8a8_Unorm>::try_from_bmp_bytes(&bytes).ok() {
-      Some(image) => image,
-      None => match netpbm_try_bitmap(&bytes).ok() {
-        Some(image) => image,
-        None => {
-          println!("Couldn't parse the file.");
-          return;
-        }
-      },
-    },
-  };
-  image.vertical_flip();
+  let mut image: Bitmap<r8g8b8a8_Srgb> = try_bitmap_rgba(&bytes, false).unwrap();
 
   // Initializes SDL2
   let sdl = Sdl::init(InitFlags::VIDEO);
@@ -113,7 +101,7 @@ fn main() {
   // Makes the window with a GL Context.
   let win = sdl
     .create_gl_window(CreateWinArgs {
-      title: "Example Viewer",
+      title: path.file_name().and_then(OsStr::to_str).unwrap_or("?"),
       width: image.width.try_into().unwrap(),
       height: image.height.try_into().unwrap(),
       ..Default::default()
@@ -165,39 +153,17 @@ fn main() {
   gl.vertex_attrib_f32_pointer::<[f32; 2]>(1, size_of::<Vertex>(), size_of::<[f32; 3]>());
 
   let shader_header = if USE_GLES { GLES_SHADER_HEADER } else { GL_SHADER_HEADER };
-  let vertex_shader = gl.create_shader(VertexShader).unwrap();
   let vertex_src = format!("{shader_header}\n{VERTEX_SRC}");
-  gl.set_shader_source(&vertex_shader, &vertex_src);
-  gl.compile_shader(&vertex_shader);
-  if !gl.get_shader_compile_success(&vertex_shader) {
-    let log = gl.get_shader_info_log(&vertex_shader);
-    panic!("Vertex Shader Error: {log}");
-  }
-
-  let fragment_shader = gl.create_shader(FragmentShader).unwrap();
   let fragment_src = format!("{shader_header}\n{FRAGMENT_SRC}");
-  gl.set_shader_source(&fragment_shader, &fragment_src);
-  gl.compile_shader(&fragment_shader);
-  if !gl.get_shader_compile_success(&fragment_shader) {
-    let log = gl.get_shader_info_log(&fragment_shader);
-    panic!("Vertex Shader Error: {log}");
-  }
 
-  let program = gl.create_program().unwrap();
-  gl.attach_shader(&program, &vertex_shader);
-  gl.attach_shader(&program, &fragment_shader);
-  gl.link_program(&program);
-  if !gl.get_program_link_success(&program) {
-    let log = gl.get_program_info_log(&program);
-    panic!("Program Link Error: {log}");
-  }
+  let program = gl.create_vertex_fragment_program(&vertex_src, &fragment_src).unwrap();
   gl.use_program(&program);
 
+  let yellow = r32g32b32a32_Sfloat { r: 1.0, g: 1.0, b: 0.0, a: 1.0 };
   let texture = gl.gen_texture().unwrap();
   gl.bind_texture(Texture2D, &texture);
-  gl.set_texture_wrap_s(Texture2D, TextureWrap::MirroredRepeat);
-  gl.set_texture_wrap_t(Texture2D, TextureWrap::MirroredRepeat);
-  let yellow = r32g32b32a32_Sfloat { r: 1.0, g: 1.0, b: 0.0, a: 1.0 };
+  gl.set_texture_wrap_s(Texture2D, TextureWrap::ClampToBorder);
+  gl.set_texture_wrap_t(Texture2D, TextureWrap::ClampToBorder);
   gl.set_texture_border_color(Texture2D, &yellow);
   gl.set_texture_min_filter(Texture2D, MinFilter::LinearMipmapLinear);
   gl.set_texture_mag_filter(Texture2D, MagFilter::Linear);
@@ -236,15 +202,11 @@ fn main() {
       match std::fs::read(path) {
         Ok(bytes) => {
           println!("got {} bytes.", bytes.len());
-          match Bitmap::<r8g8b8a8_Unorm>::try_from_png_bytes(&bytes)
-            .or_else(|| Bitmap::<r8g8b8a8_Unorm>::try_from_bmp_bytes(&bytes).ok())
-            .or_else(|| netpbm_try_bitmap(&bytes).ok())
-          {
-            Some(new_image) => {
+          match try_bitmap_rgba(&bytes, false) {
+            Ok(new_image) => {
               if new_image.width <= 1920 && new_image.height <= 1080 {
                 image = new_image;
-                image.vertical_flip();
-                win.set_title(&format!("{}", path.display()));
+                win.set_title(path.file_name().and_then(OsStr::to_str).unwrap_or("?"));
                 win.set_window_size(image.width as _, image.height as _);
                 println!("image is now ({}, {})", image.width, image.height);
               } else {
@@ -255,12 +217,12 @@ fn main() {
                 0,
                 image.width.try_into().unwrap(),
                 image.height.try_into().unwrap(),
-                cast_slice::<_, r8g8b8a8_Srgb>(&image.pixels),
+                &image.pixels,
               );
               gl.generate_mipmap(Texture2D);
             }
-            None => {
-              println!("Couldn't parse the file.");
+            Err(e) => {
+              println!("Couldn't parse the file: {e:?}");
             }
           };
         }

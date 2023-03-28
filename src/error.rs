@@ -5,28 +5,40 @@ use core::{num::ParseIntError, str::Utf8Error};
 pub enum ImagineError {
   /// The allocator couldn't give us enough space.
   #[cfg(feature = "alloc")]
-  AllocError,
+  Alloc,
+
   /// Failed to parse the data given.
+  Parse,
+
+  /// The parsing completed properly, but one or more values had an illegal
+  /// combination.
   ///
-  /// For any particular file format, all sorts of things could go wrong.
-  ParseError,
+  /// For example, the width or height might be 0, or the bit depth and
+  /// compression format might be an illegal combination.
+  Value,
+
+  /// There's (probably) nothing wrong with your file, but the library can't
+  /// handle it because some part of the decoder is incomplete.
+  ///
+  /// As an example: the netpbm parser can't handle the P7 format.
+  IncompleteLibrary,
 }
 #[cfg(feature = "alloc")]
 impl From<alloc::collections::TryReserveError> for ImagineError {
   #[inline]
   fn from(_: alloc::collections::TryReserveError) -> Self {
-    Self::AllocError
+    Self::Alloc
   }
 }
 impl From<Utf8Error> for ImagineError {
   #[inline]
   fn from(_: Utf8Error) -> Self {
-    Self::ParseError
+    Self::Parse
   }
 }
 impl From<ParseIntError> for ImagineError {
   #[inline]
   fn from(_: ParseIntError) -> Self {
-    Self::ParseError
+    Self::Parse
   }
 }

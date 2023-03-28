@@ -17,9 +17,9 @@ bmp = [] # Windows Bitmap
 netpbm = [] # Covers all the Netpbm files: pbm, pgm, ppm, pnm, pam
 
 [dependencies]
-pixel_formats = "0.1.3"
+pixel_formats = "0.1.5"
 bytemuck = "1.13.1"
-bitfrob = "1.1.0"
+bitfrob = {version = "1.2.0", features=["track_caller"]}
 miniz_oxide = { version = "0.7.1", default-features = false, optional = true }
 wide = { version = "0.7.8", default-features = false, optional = true }
 

@@ -14,7 +14,7 @@ use core::{
   num::ParseIntError,
   str::{from_utf8, Utf8Error},
 };
-use pixel_formats::r32g32b32_Sfloat;
+use pixel_formats::*;
 
 use crate::ImagineError;
 
@@ -43,7 +43,7 @@ pub struct NetpbmHeader {
 pub const fn netpbm_pull_tag(bytes: &[u8]) -> Result<(u8, &[u8]), ImagineError> {
   match bytes {
     [b'P', tag, rest @ ..] => Ok((tag.wrapping_sub(b'0'), rest)),
-    _ => Err(ImagineError::ParseError),
+    _ => Err(ImagineError::Parse),
   }
 }
 
@@ -77,8 +77,8 @@ pub fn netpbm_trim(mut bytes: &[u8]) -> &[u8] {
 #[doc(hidden)]
 pub fn netpbm_pull_ascii_u32(bytes: &[u8]) -> Result<(u32, &[u8]), ImagineError> {
   let mut it = bytes.splitn(2, |u| !u.is_ascii_digit());
-  let digits = it.next().ok_or(ImagineError::ParseError)?;
-  let spare = it.next().ok_or(ImagineError::ParseError)?;
+  let digits = it.next().ok_or(ImagineError::Parse)?;
+  let spare = it.next().ok_or(ImagineError::Parse)?;
   let digits_str = from_utf8(digits)?;
   let number = digits_str.parse::<u32>()?;
   Ok((number, spare))
@@ -89,7 +89,7 @@ pub fn netpbm_pull_ascii_u32(bytes: &[u8]) -> Result<(u32, &[u8]), ImagineError>
 pub fn netpbm_pull_header(bytes: &[u8]) -> Result<(NetpbmHeader, &[u8]), ImagineError> {
   let (tag, rest) = netpbm_pull_tag(bytes)?;
   if !(1..=6).contains(&tag) {
-    return Err(ImagineError::ParseError);
+    return Err(ImagineError::Parse);
   }
   let (width, rest) = netpbm_pull_ascii_u32(netpbm_trim(rest))?;
   let (height, rest) = netpbm_pull_ascii_u32(netpbm_trim(rest))?;
@@ -183,77 +183,128 @@ pub fn netpbm_iter_p6(mut bytes: &[u8]) -> impl Iterator<Item = [u8; 3]> + '_ {
 /// Parse the file bytes for a header and then run the `f` given for each pixel.
 ///
 /// Pixels will be produced left to right, top to bottom.
+///
+/// This iterator will automatically limit itself to processing *at most* the
+/// `width` and `height` found in the header. If there's more data than that it
+/// will be ignored.
 #[inline]
-pub fn netpbm_for_each_rgb<F: FnMut(r32g32b32_Sfloat)>(bytes: &[u8], f: F) {
-  if let Ok((header, rest)) = netpbm_pull_header(bytes) {
-    match header.tag {
-      1 => netpbm_iter_p1(rest)
-        .map(|b| {
-          if b {
-            r32g32b32_Sfloat { r: 0.0, g: 0.0, b: 0.0 }
-          } else {
-            r32g32b32_Sfloat { r: 1.0, g: 1.0, b: 1.0 }
-          }
-        })
-        .for_each(f),
-      2 => netpbm_iter_p2(rest)
-        .map(|y| {
-          let yf = (y as f32) / (header.max as f32);
-          r32g32b32_Sfloat { r: yf, g: yf, b: yf }
-        })
-        .for_each(f),
-      3 => netpbm_iter_p3(rest)
-        .map(|[r, g, b]| {
-          let rf = (r as f32) / (header.max as f32);
-          let gf = (g as f32) / (header.max as f32);
-          let bf = (b as f32) / (header.max as f32);
-          r32g32b32_Sfloat { r: rf, g: gf, b: bf }
-        })
-        .for_each(f),
-      4 => netpbm_iter_p4(rest)
-        .map(|b| {
-          if b {
-            r32g32b32_Sfloat { r: 0.0, g: 0.0, b: 0.0 }
-          } else {
-            r32g32b32_Sfloat { r: 1.0, g: 1.0, b: 1.0 }
-          }
-        })
-        .for_each(f),
-      5 => netpbm_iter_p5(rest)
-        .map(|y| {
-          let yf = (y as f32) / (header.max as f32);
-          r32g32b32_Sfloat { r: yf, g: yf, b: yf }
-        })
-        .for_each(f),
-      6 => netpbm_iter_p6(rest)
-        .map(|[r, g, b]| {
-          let rf = (r as f32) / (header.max as f32);
-          let gf = (g as f32) / (header.max as f32);
-          let bf = (b as f32) / (header.max as f32);
-          r32g32b32_Sfloat { r: rf, g: gf, b: bf }
-        })
-        .for_each(f),
-      _ => unimplemented!(),
-    }
+pub fn netpbm_for_each_rgb<F: FnMut(r32g32b32_Sfloat)>(
+  bytes: &[u8], f: F,
+) -> Result<(), ImagineError> {
+  let (header, rest) = netpbm_pull_header(bytes)?;
+  let target_pixel_count: usize =
+    header.width.checked_mul(header.height).ok_or(ImagineError::Value)?.try_into().unwrap();
+  match header.tag {
+    1 => netpbm_iter_p1(rest)
+      .take(target_pixel_count)
+      .map(|b| {
+        if b {
+          r32g32b32_Sfloat { r: 0.0, g: 0.0, b: 0.0 }
+        } else {
+          r32g32b32_Sfloat { r: 1.0, g: 1.0, b: 1.0 }
+        }
+      })
+      .for_each(f),
+    2 => netpbm_iter_p2(rest)
+      .map(|y| {
+        let yf = (y as f32) / (header.max as f32);
+        r32g32b32_Sfloat { r: yf, g: yf, b: yf }
+      })
+      .for_each(f),
+    3 => netpbm_iter_p3(rest)
+      .take(target_pixel_count)
+      .map(|[r, g, b]| {
+        let rf = (r as f32) / (header.max as f32);
+        let gf = (g as f32) / (header.max as f32);
+        let bf = (b as f32) / (header.max as f32);
+        r32g32b32_Sfloat { r: rf, g: gf, b: bf }
+      })
+      .for_each(f),
+    4 => netpbm_iter_p4(rest)
+      .take(target_pixel_count)
+      .map(|b| {
+        if b {
+          r32g32b32_Sfloat { r: 0.0, g: 0.0, b: 0.0 }
+        } else {
+          r32g32b32_Sfloat { r: 1.0, g: 1.0, b: 1.0 }
+        }
+      })
+      .for_each(f),
+    5 => netpbm_iter_p5(rest)
+      .take(target_pixel_count)
+      .map(|y| {
+        let yf = (y as f32) / (header.max as f32);
+        r32g32b32_Sfloat { r: yf, g: yf, b: yf }
+      })
+      .for_each(f),
+    6 => netpbm_iter_p6(rest)
+      .take(target_pixel_count)
+      .map(|[r, g, b]| {
+        let rf = (r as f32) / (header.max as f32);
+        let gf = (g as f32) / (header.max as f32);
+        let bf = (b as f32) / (header.max as f32);
+        r32g32b32_Sfloat { r: rf, g: gf, b: bf }
+      })
+      .for_each(f),
+    _ => return Err(ImagineError::IncompleteLibrary),
   }
+  Ok(())
 }
 
 /// Automatically allocate and fill in a [Bitmap](crate::image::Bitmap).
+///
+/// If the file has less than `width * height` pixels defined, the remainder
+/// will be filled with black. If *more* pixels than that are defined the excess
+/// data will be ignored.
+///
+/// Per the file format's definition, the origin of the image is always the top
+/// left.
 #[inline]
 #[cfg(feature = "alloc")]
 #[cfg_attr(docs_rs, doc(cfg(feature = "alloc")))]
-pub fn netpbm_try_bitmap<P>(bytes: &[u8]) -> Result<crate::image::Bitmap<P>, ImagineError>
+pub fn netpbm_try_bitmap_rgb<P>(bytes: &[u8]) -> Result<crate::image::Bitmap<P>, ImagineError>
 where
-  P: From<r32g32b32_Sfloat>,
+  P: Copy + From<r32g32b32_Sfloat>,
 {
   use alloc::vec::Vec;
   //
   let (header, _rest) = netpbm_pull_header(bytes)?;
+  let target_pixel_count: usize =
+    header.width.checked_mul(header.height).ok_or(ImagineError::Value)?.try_into().unwrap();
   let mut pixels: Vec<P> = {
     let mut v = Vec::new();
-    v.try_reserve(header.width.saturating_mul(header.height) as usize)?;
+    v.try_reserve(target_pixel_count)?;
     v
   };
-  netpbm_for_each_rgb(bytes, |p| pixels.push(p.into()));
+  netpbm_for_each_rgb(bytes, |p| pixels.push(p.into()))?;
+  let black: P = P::from(r32g32b32_Sfloat::BLACK);
+  pixels.resize(target_pixel_count, black);
+  Ok(crate::image::Bitmap { width: header.width, height: header.height, pixels })
+}
+
+/// Automatically allocate and fill in a [Bitmap](crate::image::Bitmap).
+///
+/// This works just like [`netpbm_try_bitmap_rgb`], but automatically adds an
+/// alpha value (full opacity).
+#[inline]
+#[cfg(feature = "alloc")]
+#[cfg_attr(docs_rs, doc(cfg(feature = "alloc")))]
+pub fn netpbm_try_bitmap_rgba<P>(bytes: &[u8]) -> Result<crate::image::Bitmap<P>, ImagineError>
+where
+  P: Copy + From<r32g32b32a32_Sfloat>,
+{
+  use alloc::vec::Vec;
+  //
+  let (header, _rest) = netpbm_pull_header(bytes)?;
+  let target_pixel_count: usize =
+    header.width.checked_mul(header.height).ok_or(ImagineError::Value)?.try_into().unwrap();
+  let mut pixels: Vec<P> = {
+    let mut v = Vec::new();
+    v.try_reserve(target_pixel_count)?;
+    v
+  };
+  netpbm_for_each_rgb(bytes, |p| pixels.push(P::from(r32g32b32a32_Sfloat::from(p))))?;
+  let black: P = P::from(r32g32b32a32_Sfloat::OPAQUE_BLACK);
+  pixels.resize(target_pixel_count, black);
   Ok(crate::image::Bitmap { width: header.width, height: header.height, pixels })
 }
