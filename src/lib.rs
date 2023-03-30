@@ -4,6 +4,7 @@
 #![allow(unused_imports)]
 #![allow(clippy::drop_copy)]
 #![allow(clippy::get_first)]
+#![allow(non_upper_case_globals)]
 #![allow(clippy::upper_case_acronyms)]
 #![cfg_attr(docs_rs, feature(doc_cfg))]
 #![warn(missing_debug_implementations)]
