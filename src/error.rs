@@ -1,4 +1,7 @@
-use core::{num::ParseIntError, str::Utf8Error};
+use core::{
+  num::{ParseIntError, TryFromIntError},
+  str::Utf8Error,
+};
 
 /// An error from the `imagine` crate.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -40,5 +43,11 @@ impl From<ParseIntError> for ImagineError {
   #[inline]
   fn from(_: ParseIntError) -> Self {
     Self::Parse
+  }
+}
+impl From<TryFromIntError> for ImagineError {
+  #[inline]
+  fn from(_: TryFromIntError) -> Self {
+    Self::Value
   }
 }
