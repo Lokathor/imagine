@@ -49,3 +49,10 @@ impl<const N: usize> From<[u8; N]> for AsciiArray<N> {
     Self(array)
   }
 }
+impl<const N: usize> PartialEq<&str> for AsciiArray<N> {
+  #[inline]
+  #[must_use]
+  fn eq(&self, other: &&str) -> bool {
+    self.0.as_slice() == other.as_bytes()
+  }
+}
