@@ -1,7 +1,12 @@
 #![allow(dead_code)]
 
+use bytemuck::{checked::pod_read_unaligned, Pod};
+
 use crate::ImagineError;
-use core::num::{NonZeroU16, NonZeroU32};
+use core::{
+  mem::size_of,
+  num::{NonZeroU16, NonZeroU32},
+};
 
 #[inline]
 pub(crate) fn try_pull_byte_array<const N: usize>(
@@ -10,6 +15,18 @@ pub(crate) fn try_pull_byte_array<const N: usize>(
   if bytes.len() >= N {
     let (head, tail) = bytes.split_at(N);
     let a: [u8; N] = head.try_into().unwrap();
+    Ok((a, tail))
+  } else {
+    Err(ImagineError::Parse)
+  }
+}
+
+#[inline]
+pub(crate) fn try_pull_pod<T: Pod>(bytes: &[u8]) -> Result<(T, &[u8]), ImagineError> {
+  let position = size_of::<T>();
+  if bytes.len() >= position {
+    let (head, tail) = bytes.split_at(position);
+    let a: T = pod_read_unaligned(head);
     Ok((a, tail))
   } else {
     Err(ImagineError::Parse)

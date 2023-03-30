@@ -12,7 +12,7 @@ use core::fmt::Write;
 /// which are intended to match ascii sequences (such as PNG header tags), and
 /// so this is a useful newtype to use in other structures to give them a better
 /// `Debug` output.
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, bytemuck::Zeroable, bytemuck::Pod)]
 #[repr(transparent)]
 pub struct AsciiArray<const N: usize>(pub [u8; N]);
 impl<const N: usize> Default for AsciiArray<N> {

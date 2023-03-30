@@ -1,12 +1,18 @@
 #![allow(missing_docs)]
 
-use core::num::{NonZeroU32, NonZeroU8};
-
+use crate::{sRGBIntent, util::*, ImagineError};
 use bitfrob::{U8BitIterHigh, U8BitIterLow};
 use bytemuck::{cast_slice, try_cast_slice};
+use core::{
+  mem::size_of,
+  num::{NonZeroU32, NonZeroU8},
+};
+use pack1::U32LE;
 use pixel_formats::*;
 
-use crate::{sRGBIntent, util::*, ImagineError};
+mod header_structs;
+
+use header_structs::*;
 
 /// Header data from a bitmap file.
 ///
@@ -373,22 +379,59 @@ pub fn bmp_signature_is_correct(bytes: &[u8]) -> bool {
   }
 }
 
-const SIZE_OF_FILE_HEADER: usize = 14;
-
 #[inline]
+#[allow(bad_style)]
 pub fn bmp_get_header(bytes: &[u8]) -> Result<BmpHeader, ImagineError> {
-  const SIZE_OF_U32: usize = 4;
-  const MIN_FOR_INFO_HEADER_SIZE: usize = SIZE_OF_FILE_HEADER + SIZE_OF_U32;
-  let rest = if bytes.len() >= MIN_FOR_INFO_HEADER_SIZE {
-    &bytes[SIZE_OF_FILE_HEADER..]
-  } else {
-    return Err(ImagineError::Parse);
-  };
-  let info_header_size = u32_le(&rest[0..4]);
-  let i_start = u32_le(&bytes[10..14]).try_into().unwrap();
-  match info_header_size {
-    40 => try_header_v1(i_start, rest),
-    124 => try_header_v5(i_start, rest),
+  const size_BitmapCoreHeader: usize = size_of::<BitmapCoreHeader>();
+  const size_BitmapInfoHeader: usize = size_of::<BitmapInfoHeader>();
+  const size_BitmapV2InfoHeader: usize = size_of::<BitmapV2InfoHeader>();
+  const size_BitmapV3InfoHeader: usize = size_of::<BitmapV3InfoHeader>();
+  const size_BitmapV4Header: usize = size_of::<BitmapV4Header>();
+  const size_BitmapV5Header: usize = size_of::<BitmapV5Header>();
+  dbg!(
+    size_BitmapCoreHeader,
+    size_BitmapInfoHeader,
+    size_BitmapV2InfoHeader,
+    size_BitmapV3InfoHeader,
+    size_BitmapV4Header,
+    size_BitmapV5Header,
+  );
+  //
+  let (_file_header, rest) = try_pull_pod::<BitmapFileHeader>(bytes)?;
+  dbg!(_file_header);
+  let (info_header_size, _) = try_pull_pod::<U32LE>(rest)?;
+  dbg!(info_header_size);
+  match info_header_size.get() as usize {
+    size_BitmapCoreHeader => {
+      let (info, _rest) = try_pull_pod::<BitmapCoreHeader>(rest)?;
+      dbg!(info);
+      todo!()
+    }
+    size_BitmapInfoHeader => {
+      let (info, _rest) = try_pull_pod::<BitmapInfoHeader>(rest)?;
+      dbg!(info);
+      todo!()
+    }
+    size_BitmapV2InfoHeader => {
+      let (info, _rest) = try_pull_pod::<BitmapV2InfoHeader>(rest)?;
+      dbg!(info);
+      todo!()
+    }
+    size_BitmapV3InfoHeader => {
+      let (info, _rest) = try_pull_pod::<BitmapV3InfoHeader>(rest)?;
+      dbg!(info);
+      todo!()
+    }
+    size_BitmapV4Header => {
+      let (info, _rest) = try_pull_pod::<BitmapV4Header>(rest)?;
+      dbg!(info);
+      todo!()
+    }
+    size_BitmapV5Header => {
+      let (info, _rest) = try_pull_pod::<BitmapV5Header>(rest)?;
+      dbg!(info);
+      todo!()
+    }
     _ => Err(ImagineError::Parse),
   }
 }
@@ -429,7 +472,7 @@ fn try_header_v1(i_start: usize, rest: &[u8]) -> Result<BmpHeader, ImagineError>
     .try_into()
     .unwrap();
   if num_palette_entries > 0 {
-    let low = SIZE_OF_FILE_HEADER
+    let low = size_of::<BitmapFileHeader>()
       + 40
       + match header.compression {
         Some(BmpCompression::Bitfields { .. }) => 12,
@@ -492,7 +535,7 @@ fn try_header_v5(i_start: usize, rest: &[u8]) -> Result<BmpHeader, ImagineError>
       .try_into()
       .unwrap();
     if num_palette_entries > 0 {
-      let low = SIZE_OF_FILE_HEADER
+      let low = size_of::<BitmapFileHeader>()
         + 40
         + match header.compression {
           Some(BmpCompression::Bitfields { .. }) => 12,
