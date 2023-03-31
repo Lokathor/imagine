@@ -1,49 +1,20 @@
-
 use super::*;
 
 #[derive(Debug, Clone, Copy)]
 pub enum BmpDataFormat {
-  Indexed1 {
-    palette_span: (usize, usize),
-  },
-  Indexed4 {
-    palette_span: (usize, usize),
-  },
-  Indexed4Rle {
-    palette_span: (usize, usize),
-  },
-  Indexed8 {
-    palette_span: (usize, usize),
-  },
-  Indexed8Rle {
-    palette_span: (usize, usize),
-  },
-  Bitmask16RGB {
-    r_mask: u16,
-    g_mask: u16,
-    b_mask: u16,
-  },
-  Bitmask16RGBA {
-    r_mask: u16,
-    g_mask: u16,
-    b_mask: u16,
-    a_mask: u16,
-  },
+  Indexed1 { palette_span: (usize, usize) },
+  Indexed4 { palette_span: (usize, usize) },
+  Indexed4Rle { palette_span: (usize, usize) },
+  Indexed8 { palette_span: (usize, usize) },
+  Indexed8Rle { palette_span: (usize, usize) },
+  Bitmask16RGB { r_mask: u16, g_mask: u16, b_mask: u16 },
+  Bitmask16RGBA { r_mask: u16, g_mask: u16, b_mask: u16, a_mask: u16 },
   BGR24,
-  Bitmask32RGB {
-    r_mask: u32,
-    g_mask: u32,
-    b_mask: u32,
-  },
-  Bitmask32RGBA {
-    r_mask: u32,
-    g_mask: u32,
-    b_mask: u32,
-    a_mask: u32,
-  },
+  Bitmask32RGB { r_mask: u32, g_mask: u32, b_mask: u32 },
+  Bitmask32RGBA { r_mask: u32, g_mask: u32, b_mask: u32, a_mask: u32 },
 }
 
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Copy)]
 pub struct BmpHeader {
   pub width: u32,
   pub height: u32,
@@ -56,15 +27,19 @@ impl TryFrom<BitmapV5Header> for BmpHeader {
   fn try_from(v5: BitmapV5Header) -> Result<Self, Self::Error> {
     let width = v5.width.get().unsigned_abs();
     let height = v5.height.get().unsigned_abs();
-    let origin_top_left = v5.width.get.is_negative();
-    todo!();
-    Ok(Self {
-      width,
-      height,
-      origin_top_left,
-      data_format,
-      data_span,
-    })
+    let origin_top_left = v5.width.get().is_negative();
+    let data_format = {
+      let bpp = v5.bits_per_pixel.get();
+      let compression = v5.compression.get();
+      match (bpp, compression) {
+        _ => return Err(ImagineError::Value),
+      }
+    };
+    let data_span = {
+      //
+      todo!();
+    };
+    Ok(Self { width, height, origin_top_left, data_format, data_span })
   }
 }
 

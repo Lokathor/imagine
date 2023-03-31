@@ -71,9 +71,11 @@ where
   P: Copy + From<pixel_formats::r32g32b32a32_Sfloat>,
 {
   #[cfg(feature = "bmp")]
+  #[cfg(FALSE)]
   if let Ok(bitmap) = bmp::bmp_try_bitmap_rgba(bytes, origin_top_left) {
     return Ok(bitmap);
   }
+  bmp::bmp_get_header(bytes).ok();
   #[cfg(feature = "netpbm")]
   if let Ok(mut bitmap) = netpbm::netpbm_try_bitmap_rgba(bytes) {
     if !origin_top_left {

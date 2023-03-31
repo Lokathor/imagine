@@ -13,6 +13,8 @@ use pixel_formats::*;
 mod bmp_header;
 mod raw_headers;
 
+pub use bmp_header::bmp_get_header;
+
 use self::{bmp_header::*, raw_headers::*};
 
 /// Compression options for BMP files.
@@ -459,6 +461,7 @@ pub fn bmp_iter_bitmask32_srgba(
 #[inline]
 #[cfg(feature = "alloc")]
 #[cfg_attr(docs_rs, doc(cfg(feature = "alloc")))]
+#[cfg(FALSE)]
 pub fn bmp_try_bitmap_rgb<P>(
   bytes: &[u8], origin_top_left: bool,
 ) -> Result<crate::image::Bitmap<P>, ImagineError>
@@ -515,6 +518,7 @@ where
 #[inline]
 #[cfg(feature = "alloc")]
 #[cfg_attr(docs_rs, doc(cfg(feature = "alloc")))]
+#[cfg(FALSE)]
 pub fn bmp_try_bitmap_rgba<P>(
   bytes: &[u8], origin_top_left: bool,
 ) -> Result<crate::image::Bitmap<P>, ImagineError>
