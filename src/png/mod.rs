@@ -175,7 +175,7 @@ const fn interlaced_pos_to_full_pos(
 }
 
 #[cfg(all(feature = "alloc", feature = "miniz_oxide"))]
-impl<P> crate::image::Bitmap<P>
+impl<P> crate::bitmap::Bitmap<P>
 where
   P: From<r8g8b8a8_Unorm> + Clone,
 {
@@ -312,7 +312,7 @@ where
 }
 
 #[cfg(all(feature = "alloc", feature = "miniz_oxide"))]
-impl crate::image::Palmap<u8, r8g8b8a8_Unorm> {
+impl crate::bitmap::Palmap<u8, r8g8b8a8_Unorm> {
   /// Attempts to make a [Palmap](crate::image::Palmap) from PNG bytes.
   ///
   /// ## Failure

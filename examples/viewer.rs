@@ -12,7 +12,7 @@ use ezgl::{
   gl_constants::GL_COLOR_BUFFER_BIT, BufferTarget::*, BufferUsageHint::*, DrawMode, EzGl,
   MagFilter, MinFilter, TextureTarget::*, TextureWrap,
 };
-use imagine::{image::Bitmap, try_bitmap_rgba};
+use imagine::{bitmap::Bitmap, try_bitmap_rgba};
 use pixel_formats::*;
 
 const USE_GLES: bool = cfg!(target_arch = "aarch64") || cfg!(target_arch = "arm");

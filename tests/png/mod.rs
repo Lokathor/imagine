@@ -21,7 +21,7 @@ fn test_pngs_do_not_panic_decoder() {
 
   use std::ffi::OsStr;
 
-  use imagine::image::Bitmap;
+  use imagine::bitmap::Bitmap;
   use pixel_formats::r8g8b8a8_Unorm;
   for entry in WalkDir::new("tests/").into_iter().filter_map(|e| e.ok()) {
     if entry.file_type().is_dir() {

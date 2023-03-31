@@ -68,7 +68,7 @@ pub fn padded_bytes_per_line(width: u32, bits_per_pixel: u16) -> Result<usize, I
 #[cfg_attr(docs_rs, doc(cfg(feature = "alloc")))]
 pub fn bmp_try_bitmap_rgb<P>(
   bytes: &[u8], origin_top_left: bool,
-) -> Result<crate::image::Bitmap<P>, ImagineError>
+) -> Result<crate::bitmap::Bitmap<P>, ImagineError>
 where
   P: Copy + From<r32g32b32_Sfloat>,
 {
@@ -77,10 +77,10 @@ where
   let header = bmp_get_nice_header(bytes)?;
   let target_pixel_count: usize =
     header.width.checked_mul(header.height).ok_or(ImagineError::Value)?.try_into().unwrap();
-  let mut bitmap: crate::image::Bitmap<P> = {
+  let mut bitmap: crate::bitmap::Bitmap<P> = {
     let mut pixels = Vec::new();
     pixels.try_reserve(target_pixel_count)?;
-    crate::image::Bitmap { width: header.width, height: header.height, pixels }
+    crate::bitmap::Bitmap { width: header.width, height: header.height, pixels }
   };
   let width = header.width;
   let data_span = header.data_span;
@@ -260,7 +260,7 @@ where
 #[cfg_attr(docs_rs, doc(cfg(feature = "alloc")))]
 pub fn bmp_try_bitmap_rgba<P>(
   bytes: &[u8], origin_top_left: bool,
-) -> Result<crate::image::Bitmap<P>, ImagineError>
+) -> Result<crate::bitmap::Bitmap<P>, ImagineError>
 where
   P: Copy + From<r32g32b32a32_Sfloat> + core::fmt::Debug,
 {
@@ -269,10 +269,10 @@ where
   let header = bmp_get_nice_header(bytes)?;
   let target_pixel_count: usize =
     header.width.checked_mul(header.height).ok_or(ImagineError::Value)?.try_into().unwrap();
-  let mut bitmap: crate::image::Bitmap<P> = {
+  let mut bitmap: crate::bitmap::Bitmap<P> = {
     let mut pixels = Vec::new();
     pixels.try_reserve(target_pixel_count)?;
-    crate::image::Bitmap { width: header.width, height: header.height, pixels }
+    crate::bitmap::Bitmap { width: header.width, height: header.height, pixels }
   };
   let width = header.width;
   let data_span = header.data_span;

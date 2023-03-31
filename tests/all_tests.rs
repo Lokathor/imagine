@@ -2,7 +2,7 @@
 #![allow(unused_imports)]
 
 #[cfg(feature = "alloc")]
-use imagine::image::Bitmap;
+use imagine::bitmap::Bitmap;
 
 #[cfg(feature = "png")]
 mod png;

@@ -24,7 +24,7 @@ extern crate alloc;
 
 #[cfg(feature = "alloc")]
 #[cfg_attr(docs_rs, doc(cfg(feature = "alloc")))]
-pub mod image;
+pub mod bitmap;
 
 #[cfg(feature = "png")]
 #[cfg_attr(docs_rs, doc(cfg(feature = "png")))]
@@ -67,7 +67,7 @@ pub enum sRGBIntent {
 #[cfg_attr(docs_rs, doc(cfg(feature = "alloc")))]
 pub fn try_bitmap_rgba<P>(
   bytes: &[u8], origin_top_left: bool,
-) -> Result<crate::image::Bitmap<P>, ImagineError>
+) -> Result<crate::bitmap::Bitmap<P>, ImagineError>
 where
   P: Copy + From<pixel_formats::r32g32b32a32_Sfloat> + core::fmt::Debug,
 {

@@ -262,7 +262,7 @@ pub fn netpbm_for_each_rgb<F: FnMut(r32g32b32_Sfloat)>(
 #[inline]
 #[cfg(feature = "alloc")]
 #[cfg_attr(docs_rs, doc(cfg(feature = "alloc")))]
-pub fn netpbm_try_bitmap_rgb<P>(bytes: &[u8]) -> Result<crate::image::Bitmap<P>, ImagineError>
+pub fn netpbm_try_bitmap_rgb<P>(bytes: &[u8]) -> Result<crate::bitmap::Bitmap<P>, ImagineError>
 where
   P: Copy + From<r32g32b32_Sfloat>,
 {
@@ -279,7 +279,7 @@ where
   netpbm_for_each_rgb(bytes, |p| pixels.push(p.into()))?;
   let black: P = P::from(r32g32b32_Sfloat::BLACK);
   pixels.resize(target_pixel_count, black);
-  Ok(crate::image::Bitmap { width: header.width, height: header.height, pixels })
+  Ok(crate::bitmap::Bitmap { width: header.width, height: header.height, pixels })
 }
 
 /// Automatically allocate and fill in a [Bitmap](crate::image::Bitmap).
@@ -289,7 +289,7 @@ where
 #[inline]
 #[cfg(feature = "alloc")]
 #[cfg_attr(docs_rs, doc(cfg(feature = "alloc")))]
-pub fn netpbm_try_bitmap_rgba<P>(bytes: &[u8]) -> Result<crate::image::Bitmap<P>, ImagineError>
+pub fn netpbm_try_bitmap_rgba<P>(bytes: &[u8]) -> Result<crate::bitmap::Bitmap<P>, ImagineError>
 where
   P: Copy + From<r32g32b32a32_Sfloat>,
 {
@@ -306,5 +306,5 @@ where
   netpbm_for_each_rgb(bytes, |p| pixels.push(P::from(r32g32b32a32_Sfloat::from(p))))?;
   let black: P = P::from(r32g32b32a32_Sfloat::OPAQUE_BLACK);
   pixels.resize(target_pixel_count, black);
-  Ok(crate::image::Bitmap { width: header.width, height: header.height, pixels })
+  Ok(crate::bitmap::Bitmap { width: header.width, height: header.height, pixels })
 }
