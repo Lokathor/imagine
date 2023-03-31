@@ -10,12 +10,10 @@ use core::{
 use pack1::U32LE;
 use pixel_formats::*;
 
-mod bmp_header;
-mod raw_headers;
+pub mod nice_header;
+pub mod raw_headers;
 
-pub use bmp_header::bmp_get_header;
-
-use self::{bmp_header::*, raw_headers::*};
+use self::{nice_header::*, raw_headers::*};
 
 /// Compression options for BMP files.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
