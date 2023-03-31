@@ -1,5 +1,6 @@
 //#![no_std]
 #![warn(missing_docs)]
+#![forbid(unsafe_code)]
 #![allow(unused_labels)]
 #![allow(unused_imports)]
 #![allow(clippy::drop_copy)]
