@@ -262,7 +262,7 @@ pub fn bmp_try_bitmap_rgba<P>(
   bytes: &[u8], origin_top_left: bool,
 ) -> Result<crate::bitmap::Bitmap<P>, ImagineError>
 where
-  P: Copy + From<r32g32b32a32_Sfloat> + core::fmt::Debug,
+  P: Copy + From<r32g32b32a32_Sfloat>,
 {
   use alloc::vec::Vec;
 
