@@ -35,7 +35,7 @@ impl<P> Bitmap<P> {
   pub fn get_mut(&mut self, x: u32, y: u32) -> Option<&mut P> {
     if x < self.width && y < self.height {
       let i = xy_width_to_index(x, y, self.width);
-      Some(&mut self.pixels[i])
+      self.pixels.get_mut(i)
     } else {
       None
     }

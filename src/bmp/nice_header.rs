@@ -35,15 +35,6 @@ pub struct BmpNiceHeader {
   pub data_span: (usize, usize),
 }
 
-fn padded_bytes_per_line(width: u32, bits_per_pixel: u16) -> Result<usize, ImagineError> {
-  let width: usize = width.try_into()?;
-  let bits_per_pixel = usize::from(bits_per_pixel);
-  let bits_per_line = bits_per_pixel.checked_mul(width).ok_or(ImagineError::Value)?;
-  let bytes_per_line = bits_per_line / 8 + usize::from(bits_per_line % 8 != 0);
-  let dwords_per_line = bytes_per_line / 4 + usize::from(bytes_per_line % 4 != 0);
-  dwords_per_line.checked_mul(4).ok_or(ImagineError::Value)
-}
-
 #[inline]
 #[allow(bad_style)]
 pub fn bmp_get_nice_header(bytes: &[u8]) -> Result<BmpNiceHeader, ImagineError> {
@@ -99,6 +90,7 @@ pub fn bmp_get_nice_header(bytes: &[u8]) -> Result<BmpNiceHeader, ImagineError> 
     size_BitmapV5Header => try_pull_pod::<BitmapV5Header>(rest)?,
     _ => return Err(ImagineError::Parse),
   };
+  //dbg!(v5);
   let width = v5.width.get().unsigned_abs();
   if width == 0 {
     return Err(ImagineError::Value);
@@ -115,7 +107,7 @@ pub fn bmp_get_nice_header(bytes: &[u8]) -> Result<BmpNiceHeader, ImagineError> 
       .checked_add(info_header_size.get().try_into()?)
       .ok_or(ImagineError::Value)?;
     let pal_entry_count: usize = if v5.colors_used.get() == 0 {
-      1 << bits_per_pixel
+      1_usize.wrapping_shl(u32::from(bits_per_pixel))
     } else {
       v5.colors_used.get().try_into()?
     };
@@ -182,5 +174,7 @@ pub fn bmp_get_nice_header(bytes: &[u8]) -> Result<BmpNiceHeader, ImagineError> 
     };
     (data_start, data_end)
   };
-  Ok(BmpNiceHeader { width, height, origin_top_left, data_format, data_span })
+  let header = BmpNiceHeader { width, height, origin_top_left, data_format, data_span };
+  //dbg!(header);
+  Ok(header)
 }

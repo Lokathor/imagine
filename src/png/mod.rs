@@ -224,7 +224,7 @@ where
         // can maybe proceed with partial results).
       }
     }
-    let pixel_count = (ihdr.width * ihdr.height) as usize;
+    let pixel_count = ihdr.width.checked_mul(ihdr.height)? as usize;
     let mut pixels: Vec<P> = Vec::new();
     pixels.try_reserve(pixel_count).ok()?;
     // ferris plz make this into a memset

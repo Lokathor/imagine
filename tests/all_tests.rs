@@ -7,6 +7,9 @@ use imagine::image::Bitmap;
 #[cfg(feature = "png")]
 mod png;
 
+#[cfg(feature = "bmp")]
+mod bmp;
+
 #[allow(dead_code)]
 fn rand_bytes(count: usize) -> Vec<u8> {
   let mut buffer = vec![0; count];
