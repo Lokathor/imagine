@@ -39,5 +39,9 @@ name = "png_chunk_print"
 required-features = ["png"]
 
 [[example]]
+name = "bmp_print"
+required-features = ["bmp"]
+
+[[example]]
 name = "viewer"
 required-features = ["alloc", "png", "miniz_oxide", "bmp", "netpbm"]
