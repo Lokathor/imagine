@@ -5,6 +5,7 @@
 use core::ops::{Index, IndexMut};
 
 use alloc::vec::Vec;
+use pixel_formats::r8g8b8a8_Srgb;
 
 /// Converts an `(x,y)` position within a given `width` 2D space into a linear
 /// index.
@@ -22,7 +23,7 @@ pub const fn xy_width_to_index(x: u32, y: u32, width: u32) -> usize {
 /// A direct-color image.
 #[derive(Debug, Clone, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[allow(missing_docs)]
-pub struct Bitmap<P> {
+pub struct Bitmap<P = r8g8b8a8_Srgb> {
   pub width: u32,
   pub height: u32,
   pub pixels: Vec<P>,
@@ -67,7 +68,7 @@ impl<P> Bitmap<P> {
 /// An indexed-color image.
 #[derive(Debug, Clone, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[allow(missing_docs)]
-pub struct Palmap<I, P> {
+pub struct Palmap<I = u8, P = r8g8b8a8_Srgb> {
   pub width: u32,
   pub height: u32,
   pub indexes: Vec<I>,
