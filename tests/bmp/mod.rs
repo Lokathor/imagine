@@ -21,7 +21,7 @@ fn test_bmps_do_not_panic_decoder() {
         continue;
       }
     };
-    let _: Option<Bitmap<r32g32b32a32_Sfloat>> = bmp_try_bitmap_rgba(&v, true).ok();
+    let _: Option<Bitmap> = bmp_try_bitmap_rgba(&v, true).ok();
     // Most test images are "hostile" so they naturally fail to parse.
     // However, the library shouldn't panic even with a hostile image.
   }
