@@ -26,15 +26,12 @@ pub fn bmp_iter_pal_indexes_no_compression(
 ///
 /// The encoding of the `u8` values depends on if the image is sRGB or not. If
 /// the image is not sRGB then it's most likely linear values in each channel.
-///
-/// ## Panics
-/// * The `image_bytes` must have a length that's a multiple of 3.
 #[inline]
 pub fn bmp_iter_bgr24(image_bytes: &[u8], width: u32) -> impl Iterator<Item = [u8; 3]> + '_ {
   let padded_bytes_per_line = padded_bytes_per_line(width, 24).unwrap_or(4);
   image_bytes.chunks(padded_bytes_per_line).flat_map(move |line| {
     line
-      .chunks(3)
+      .chunks_exact(3)
       .map(|c| <[u8; 3]>::try_from(c).unwrap_or_default())
       .take(width.try_into().unwrap_or_default())
   })
@@ -45,9 +42,9 @@ pub fn bmp_iter_bgr24(image_bytes: &[u8], width: u32) -> impl Iterator<Item = [u
 pub fn bmp_iter_bitmask16_rgb(
   image_bytes: &[u8], r_mask: u16, g_mask: u16, b_mask: u16, width: u32,
 ) -> impl Iterator<Item = r32g32b32_Sfloat> + '_ {
-  let r_shift = r_mask.trailing_zeros().min(31);
-  let g_shift = g_mask.trailing_zeros().min(31);
-  let b_shift = b_mask.trailing_zeros().min(31);
+  let r_shift = r_mask.trailing_zeros().min(15);
+  let g_shift = g_mask.trailing_zeros().min(15);
+  let b_shift = b_mask.trailing_zeros().min(15);
   let r_max = r_mask >> r_shift;
   let g_max = g_mask >> g_shift;
   let b_max = b_mask >> b_shift;
@@ -79,10 +76,10 @@ pub fn bmp_iter_bitmask16_rgb(
 pub fn bmp_iter_bitmask16_rgba(
   image_bytes: &[u8], r_mask: u16, g_mask: u16, b_mask: u16, a_mask: u16, width: u32,
 ) -> impl Iterator<Item = r32g32b32a32_Sfloat> + '_ {
-  let r_shift = r_mask.trailing_zeros().min(31);
-  let g_shift = g_mask.trailing_zeros().min(31);
-  let b_shift = b_mask.trailing_zeros().min(31);
-  let a_shift = a_mask.trailing_zeros().min(31);
+  let r_shift = r_mask.trailing_zeros().min(15);
+  let g_shift = g_mask.trailing_zeros().min(15);
+  let b_shift = b_mask.trailing_zeros().min(15);
+  let a_shift = a_mask.trailing_zeros().min(15);
   let r_max = r_mask >> r_shift;
   let g_max = g_mask >> g_shift;
   let b_max = b_mask >> b_shift;
