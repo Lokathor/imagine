@@ -296,6 +296,9 @@ where
   use alloc::vec::Vec;
   //
   let (header, _rest) = netpbm_pull_header(bytes)?;
+  if header.width > 17_000 || header.height > 17_000 {
+    return Err(ImagineError::DimensionsTooLarge);
+  }
   let target_pixel_count: usize =
     header.width.checked_mul(header.height).ok_or(ImagineError::Value)?.try_into().unwrap();
   let mut pixels: Vec<P> = {

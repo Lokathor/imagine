@@ -10,6 +10,12 @@ pub enum ImagineError {
   #[cfg(feature = "alloc")]
   Alloc,
 
+  /// The image is too large.
+  ///
+  /// The automatic decoder limits the width and height of images it processes
+  /// to be 17,000 or less to prevent accidental out-of-memory problems.
+  DimensionsTooLarge,
+
   /// Failed to parse the data given.
   Parse,
 
