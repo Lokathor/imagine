@@ -17,21 +17,6 @@ pub mod rle;
 
 use self::{iters::*, nice_header::*, raw_headers::*, rle::*};
 
-/// Compression options for BMP files.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum BmpCompression {
-  /// MSDN: [Bitmap Compression][1]
-  ///
-  /// [1]: https://learn.microsoft.com/en-us/windows/win32/gdi/bitmap-compression
-  RunLengthEncoding,
-  /// RGB bitfields
-  #[allow(missing_docs)]
-  Bitfields { r_mask: u32, g_mask: u32, b_mask: u32 },
-  /// RGBA bitfields
-  #[allow(missing_docs)]
-  AlphaBitfields { r_mask: u32, g_mask: u32, b_mask: u32, a_mask: u32 },
-}
-
 /// Checks if a BMP's initial 14 bytes are correct.
 #[inline]
 pub fn bmp_signature_is_correct(bytes: &[u8]) -> bool {
