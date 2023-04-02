@@ -1,5 +1,3 @@
-#![forbid(unsafe_code)]
-
 //! Provides heap-allocated image types.
 
 use core::ops::{Index, IndexMut};
@@ -20,11 +18,14 @@ pub const fn xy_width_to_index(x: u32, y: u32, width: u32) -> usize {
   y.wrapping_mul(width).wrapping_add(x) as usize
 }
 
+/// Borrow of bitmap data.
 #[derive(Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
-#[allow(missing_docs)]
 pub struct BorrowedBitmap<'a, P = r8g8b8a8_Srgb> {
+  /// Width in pixels.
   pub width: u32,
+  /// Height in pixels.
   pub height: u32,
+  /// Borrow of the pixel data.
   pub pixels: &'a mut [P],
 }
 impl<'a, P> BorrowedBitmap<'a, P> {

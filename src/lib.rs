@@ -21,7 +21,7 @@ mod borrowed_bitmap;
 mod error;
 mod util;
 
-pub use self::{borrowed_bitmap::*, error::*};
+pub use self::{borrowed_bitmap::BorrowedBitmap, error::*};
 
 use pixel_formats::*;
 
@@ -30,7 +30,7 @@ use pixel_formats::*;
 mod alloc_bitmap;
 #[cfg(feature = "alloc")]
 #[cfg_attr(docs_rs, doc(cfg(feature = "alloc")))]
-pub use self::alloc_bitmap::*;
+pub use self::alloc_bitmap::{Bitmap, Palmap};
 
 #[cfg(feature = "png")]
 #[cfg_attr(docs_rs, doc(cfg(feature = "png")))]

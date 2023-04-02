@@ -1,4 +1,4 @@
-#![allow(missing_docs)]
+//! Module for BMP files.
 
 use crate::{sRGBIntent, util::*, ImagineError};
 use bitfrob::{U8BitIterHigh, U8BitIterLow};
@@ -29,6 +29,10 @@ pub fn bmp_signature_is_correct(bytes: &[u8]) -> bool {
   }
 }
 
+/// Computes the number of bytes per line when padding is applied.
+///
+/// BMP scanlines within the image data are padded to a multiple of 4 bytes
+/// (except when the image is RLE encoded).
 #[inline]
 pub fn padded_bytes_per_line(width: u32, bits_per_pixel: u16) -> Result<usize, ImagineError> {
   let width: usize = width.try_into()?;

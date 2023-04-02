@@ -1,3 +1,5 @@
+//! Iterators over BMP data.
+
 use super::*;
 
 /// Iterate the palette indexes of the image bytes, based on the bit depth.

@@ -1,16 +1,30 @@
+//! A nicer form of BMP header data.
+
 use super::*;
 
+/// All the possible formats for the image data within an BMP.
 #[derive(Debug, Clone, Copy)]
+#[allow(missing_docs)]
 pub enum BmpDataFormat {
+  /// Indexed color, 1bpp
   Indexed1 { palette_span: (usize, usize) },
+  /// Indexed color, 4bpp
   Indexed4 { palette_span: (usize, usize) },
+  /// Indexed color, 4bpp and run-length encoding
   Indexed4Rle { palette_span: (usize, usize) },
+  /// Indexed color, 8bpp
   Indexed8 { palette_span: (usize, usize) },
+  /// Indexed color, 8bpp and run-length encoding
   Indexed8Rle { palette_span: (usize, usize) },
+  /// RGB color, u16 entries that are stored via bitmasking
   Bitmask16RGB { r_mask: u16, g_mask: u16, b_mask: u16 },
+  /// RGBA color, u16 entries that are stored via bitmasking
   Bitmask16RGBA { r_mask: u16, g_mask: u16, b_mask: u16, a_mask: u16 },
+  /// Raw color values, stored with Blue,Green,Red channel ordering.
   BGR24,
+  /// RGB color, u32 entries that are stored via bitmasking
   Bitmask32RGB { r_mask: u32, g_mask: u32, b_mask: u32 },
+  /// RGBA color, u32 entries that are stored via bitmasking
   Bitmask32RGBA { r_mask: u32, g_mask: u32, b_mask: u32, a_mask: u32 },
 }
 impl BmpDataFormat {
@@ -28,13 +42,19 @@ impl BmpDataFormat {
 /// don't need.
 #[derive(Debug, Clone, Copy)]
 pub struct BmpNiceHeader {
+  /// Width in pixels.
   pub width: u32,
+  /// Height in pixels.
   pub height: u32,
+  /// If the origin is in the top left (otherwise it'll be the bottom left).
   pub origin_top_left: bool,
+  /// Format of the data.
   pub data_format: BmpDataFormat,
+  /// `(start, end)` of the data.
   pub data_span: (usize, usize),
 }
 
+/// Reads the bytes to assemble a "nice" version of the necessary header info.
 #[inline]
 #[allow(bad_style)]
 pub fn bmp_get_nice_header(bytes: &[u8]) -> Result<BmpNiceHeader, ImagineError> {

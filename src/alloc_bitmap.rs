@@ -6,12 +6,14 @@ use pixel_formats::r8g8b8a8_Srgb;
 /// The fields are public, but if you put them together weirdly the methods of
 /// this type might panic.
 #[derive(Debug, Clone, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
-#[allow(missing_docs)]
 #[cfg(feature = "alloc")]
 #[cfg_attr(docs_rs, doc(cfg(feature = "alloc")))]
 pub struct Bitmap<P = r8g8b8a8_Srgb> {
+  /// width in pixels
   pub width: u32,
+  /// height in pixels
   pub height: u32,
+  /// pixel values
   pub pixels: alloc::vec::Vec<P>,
 }
 #[cfg(feature = "alloc")]
@@ -39,13 +41,16 @@ impl<P> Bitmap<P> {
 
 /// An indexed-color image.
 #[derive(Debug, Clone, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
-#[allow(missing_docs)]
 #[cfg(feature = "alloc")]
 #[cfg_attr(docs_rs, doc(cfg(feature = "alloc")))]
 pub struct Palmap<I = u8, P = r8g8b8a8_Srgb> {
+  /// width in pixels.
   pub width: u32,
+  /// height in pixels
   pub height: u32,
+  /// index values for each pixel
   pub indexes: alloc::vec::Vec<I>,
+  /// color palette values
   pub palette: alloc::vec::Vec<P>,
 }
 #[cfg(feature = "alloc")]

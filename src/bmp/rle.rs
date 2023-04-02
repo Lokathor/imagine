@@ -1,25 +1,25 @@
+//! The BMP format's run-length encoding system.
+
 use super::*;
 
+/// Run-length Encoded 8bpp operations.
+///
+/// RLE decoding always starts at (0,0), with the origin in the lower left.
 #[derive(Debug, Clone, Copy)]
+#[allow(missing_docs)]
 pub enum BmpRle8Op {
-  Run {
-    count: NonZeroU8,
-    index: u8,
-  },
-  /// This is the *only* time that the current scanline changes.
+  /// A run of `count` entries, each of `index`.
+  Run { count: NonZeroU8, index: u8 },
+  /// x = 0, y += 1.
   Newline,
+  /// End of the RLE sequence.
   EndOfBmp,
-  Delta {
-    right: u32,
-    up: u32,
-  },
-  Raw2 {
-    q: u8,
-    w: u8,
-  },
-  Raw1 {
-    q: u8,
-  },
+  /// Adjust the current position right and up as specified.
+  Delta { right: u32, up: u32 },
+  /// Output two raw index values.
+  Raw2 { q: u8, w: u8 },
+  /// Output two raw index values.
+  Raw1 { q: u8 },
 }
 
 /// Iterate RLE encoded data, 8 bits per pixel
@@ -88,15 +88,27 @@ pub fn bmp_iter_rle8(image_bytes: &[u8]) -> impl Iterator<Item = BmpRle8Op> + '_
   })
 }
 
+/// Run-length Encoded 4bpp operations.
+///
+/// RLE decoding always starts at (0,0), with the origin in the lower left.
 #[derive(Debug, Clone, Copy)]
+#[allow(missing_docs)]
 pub enum BmpRle4Op {
+  /// A run of `count` entries, each of `index`.
   Run { count: NonZeroU8, index_h: u8, index_l: u8 },
+  /// x = 0, y += 1.
   Newline,
+  /// End of the RLE sequence.
   EndOfBmp,
+  /// Adjust the current position right and up as specified.
   Delta { right: u32, up: u32 },
+  /// Output four raw index values.
   Raw4 { a: u8, b: u8, c: u8, d: u8 },
+  /// Output three raw index values.
   Raw3 { a: u8, b: u8, c: u8 },
+  /// Output two raw index values.
   Raw2 { a: u8, b: u8 },
+  /// Output one raw index value.
   Raw1 { a: u8 },
 }
 
