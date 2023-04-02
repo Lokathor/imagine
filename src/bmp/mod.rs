@@ -1,12 +1,8 @@
 //! Module for BMP files.
 
-use crate::{sRGBIntent, util::*, ImagineError};
-use bitfrob::{U8BitIterHigh, U8BitIterLow};
-use bytemuck::try_cast_slice;
-use core::{
-  mem::size_of,
-  num::{NonZeroU32, NonZeroU8},
-};
+use crate::{util::*, ImagineError};
+use bitfrob::U8BitIterHigh;
+use core::{mem::size_of, num::NonZeroU8};
 use pack1::U32LE;
 use pixel_formats::*;
 

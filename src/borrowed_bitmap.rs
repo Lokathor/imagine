@@ -1,8 +1,5 @@
 //! Provides heap-allocated image types.
 
-use core::ops::{Index, IndexMut};
-
-use alloc::vec::Vec;
 use pixel_formats::r8g8b8a8_Srgb;
 
 /// Converts an `(x,y)` position within a given `width` 2D space into a linear

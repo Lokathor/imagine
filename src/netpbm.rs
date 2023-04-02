@@ -10,13 +10,9 @@
 //! generate a [Bitmap](crate::image::Bitmap) from the RGB data with a single
 //! function call (requires the `alloc` crate feature).
 
-use core::{
-  num::ParseIntError,
-  str::{from_utf8, Utf8Error},
-};
-use pixel_formats::*;
-
 use crate::ImagineError;
+use core::str::from_utf8;
+use pixel_formats::*;
 
 /// Header info for a Netpbm file.
 #[derive(Debug, Clone, Copy)]

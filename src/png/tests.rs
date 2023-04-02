@@ -1,7 +1,7 @@
-use super::*;
-
 #[test]
 fn test_reduced_image_dimensions() {
+  use super::*;
+
   assert_eq!(reduced_image_dimensions(0, 0), [(0, 0); 8]);
   // one
   for (w, ex) in (1..=8).zip([1, 1, 1, 1, 1, 1, 1, 1]) {
