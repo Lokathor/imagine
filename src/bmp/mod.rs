@@ -33,10 +33,10 @@ pub fn bmp_signature_is_correct(bytes: &[u8]) -> bool {
 pub fn padded_bytes_per_line(width: u32, bits_per_pixel: u16) -> Result<usize, ImagineError> {
   let width: usize = width.try_into()?;
   let bits_per_pixel = usize::from(bits_per_pixel);
-  let bits_per_line = bits_per_pixel.checked_mul(width).ok_or(ImagineError::Value)?;
+  let bits_per_line = bits_per_pixel.checked_mul(width).ok_or(ImagineError::CheckedMath)?;
   let bytes_per_line = bits_per_line / 8 + usize::from(bits_per_line % 8 != 0);
   let dwords_per_line = bytes_per_line / 4 + usize::from(bytes_per_line % 4 != 0);
-  dwords_per_line.checked_mul(4).ok_or(ImagineError::Value)
+  dwords_per_line.checked_mul(4).ok_or(ImagineError::CheckedMath)
 }
 
 /// Automatically allocate and fill in a [Bitmap](crate::image::Bitmap).
@@ -61,7 +61,7 @@ where
 
   let header = bmp_get_nice_header(bytes)?;
   let target_pixel_count: usize =
-    header.width.checked_mul(header.height).ok_or(ImagineError::Value)?.try_into().unwrap();
+    header.width.checked_mul(header.height).ok_or(ImagineError::CheckedMath)?.try_into()?;
   let mut bitmap: crate::Bitmap<P> = {
     let mut pixels = Vec::new();
     pixels.try_reserve(target_pixel_count)?;
@@ -69,7 +69,7 @@ where
   };
   let width = header.width;
   let data_span = header.data_span;
-  let image_bytes = bytes.get(data_span.0..data_span.1).ok_or(ImagineError::Value)?;
+  let image_bytes = bytes.get(data_span.0..data_span.1).ok_or(ImagineError::CheckedMath)?;
   match header.data_format {
     BmpDataFormat::Indexed1 { palette_span }
     | BmpDataFormat::Indexed4 { palette_span }
@@ -80,7 +80,7 @@ where
       // will tend to optimize away the bounds check, and it usually goes much
       // faster than using `.get(i).unwrap_or_default()` or similar.
       let mut palette: [P; 256] = [r32g32b32_Sfloat::BLACK.into(); 256];
-      let pal_bytes = bytes.get(palette_span.0..palette_span.1).ok_or(ImagineError::Value)?;
+      let pal_bytes = bytes.get(palette_span.0..palette_span.1).ok_or(ImagineError::CheckedMath)?;
       for (chunk, p) in pal_bytes.chunks_exact(4).zip(palette.iter_mut()) {
         *p = P::from(r32g32b32_Sfloat::from(r8g8b8_Srgb { b: chunk[0], g: chunk[1], r: chunk[2] }));
       }
@@ -220,7 +220,7 @@ where
         );
       }
     }
-    _ => return Err(ImagineError::Value),
+    _ => return Err(ImagineError::CheckedMath),
   }
   let black: P = P::from(r32g32b32_Sfloat::BLACK);
   bitmap.pixels.resize(target_pixel_count, black);
@@ -256,7 +256,7 @@ where
     return Err(ImagineError::DimensionsTooLarge);
   }
   let target_pixel_count: usize =
-    header.width.checked_mul(header.height).ok_or(ImagineError::Value)?.try_into().unwrap();
+    header.width.checked_mul(header.height).ok_or(ImagineError::CheckedMath)?.try_into()?;
   let mut bitmap: crate::Bitmap<P> = {
     let mut pixels = Vec::new();
     pixels.try_reserve(target_pixel_count)?;
@@ -264,7 +264,7 @@ where
   };
   let width = header.width;
   let data_span = header.data_span;
-  let image_bytes = bytes.get(data_span.0..data_span.1).ok_or(ImagineError::Value)?;
+  let image_bytes = bytes.get(data_span.0..data_span.1).ok_or(ImagineError::Parse)?;
   match header.data_format {
     BmpDataFormat::Indexed1 { palette_span }
     | BmpDataFormat::Indexed4 { palette_span }
@@ -275,7 +275,7 @@ where
       // will tend to optimize away the bounds check, and it usually goes much
       // faster than using `.get(i).unwrap_or_default()` or similar.
       let mut palette: [P; 256] = [r32g32b32a32_Sfloat::TRANSPARENT_BLACK.into(); 256];
-      let pal_bytes = bytes.get(palette_span.0..palette_span.1).ok_or(ImagineError::Value)?;
+      let pal_bytes = bytes.get(palette_span.0..palette_span.1).ok_or(ImagineError::Parse)?;
       for (chunk, p) in pal_bytes.chunks_exact(4).zip(palette.iter_mut()) {
         *p = P::from(r32g32b32a32_Sfloat::from(r8g8b8a8_Srgb {
           b: chunk[0],

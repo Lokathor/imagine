@@ -189,7 +189,7 @@ pub fn netpbm_for_each_rgb<F: FnMut(r32g32b32_Sfloat)>(
 ) -> Result<(), ImagineError> {
   let (header, rest) = netpbm_pull_header(bytes)?;
   let target_pixel_count: usize =
-    header.width.checked_mul(header.height).ok_or(ImagineError::Value)?.try_into().unwrap();
+    header.width.checked_mul(header.height).ok_or(ImagineError::CheckedMath)?.try_into().unwrap();
   match header.tag {
     1 => netpbm_iter_p1(rest)
       .take(target_pixel_count)
@@ -242,7 +242,7 @@ pub fn netpbm_for_each_rgb<F: FnMut(r32g32b32_Sfloat)>(
         r32g32b32_Sfloat { r: rf, g: gf, b: bf }
       })
       .for_each(f),
-    _ => return Err(ImagineError::IncompleteLibrary),
+    _ => return Err(ImagineError::Parse),
   }
   Ok(())
 }
@@ -266,7 +266,7 @@ where
   //
   let (header, _rest) = netpbm_pull_header(bytes)?;
   let target_pixel_count: usize =
-    header.width.checked_mul(header.height).ok_or(ImagineError::Value)?.try_into().unwrap();
+    header.width.checked_mul(header.height).ok_or(ImagineError::CheckedMath)?.try_into()?;
   let mut pixels: Vec<P> = {
     let mut v = Vec::new();
     v.try_reserve(target_pixel_count)?;
@@ -297,8 +297,14 @@ where
   if header.width > 17_000 || header.height > 17_000 {
     return Err(ImagineError::DimensionsTooLarge);
   }
+  if header.width == 0 {
+    return Err(ImagineError::WidthOrHeightZero);
+  }
+  if header.height == 0 {
+    return Err(ImagineError::WidthOrHeightZero);
+  }
   let target_pixel_count: usize =
-    header.width.checked_mul(header.height).ok_or(ImagineError::Value)?.try_into().unwrap();
+    header.width.checked_mul(header.height).ok_or(ImagineError::CheckedMath)?.try_into()?;
   let mut pixels: Vec<P> = {
     let mut v = Vec::new();
     v.try_reserve(target_pixel_count)?;

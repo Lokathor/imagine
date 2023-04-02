@@ -9,12 +9,6 @@ pub enum ImagineError {
   /// Failed to parse the data given.
   Parse,
 
-  /// There's (probably) nothing wrong with your file, but the library can't
-  /// handle it because some part of the decoder is incomplete.
-  ///
-  /// As an example: the netpbm parser can't handle the P7 format.
-  IncompleteLibrary,
-
   /// The allocator couldn't give us enough space.
   #[cfg(feature = "alloc")]
   Alloc,
@@ -25,12 +19,11 @@ pub enum ImagineError {
   /// to be 17,000 or less to prevent accidental out-of-memory problems.
   DimensionsTooLarge,
 
-  /// The parsing completed properly, but one or more values had an illegal
-  /// combination.
-  ///
-  /// For example, the width or height might be 0, or the bit depth and
-  /// compression format might be an illegal combination.
-  Value,
+  /// The declared width and/or height of this image is 0.
+  WidthOrHeightZero,
+
+  /// A checked math operation failed.
+  CheckedMath,
 }
 #[cfg(feature = "alloc")]
 impl From<alloc::collections::TryReserveError> for ImagineError {
@@ -54,6 +47,6 @@ impl From<ParseIntError> for ImagineError {
 impl From<TryFromIntError> for ImagineError {
   #[inline]
   fn from(_: TryFromIntError) -> Self {
-    Self::Value
+    Self::Parse
   }
 }

@@ -205,10 +205,16 @@ where
   if ihdr.width > 17_000 || ihdr.height > 17_000 {
     return Err(ImagineError::DimensionsTooLarge);
   }
+  if ihdr.width == 0 {
+    return Err(ImagineError::WidthOrHeightZero);
+  }
+  if ihdr.height == 0 {
+    return Err(ImagineError::WidthOrHeightZero);
+  }
 
   let transparent_black: P = P::from(r32g32b32a32_Sfloat::TRANSPARENT_BLACK);
   let target_pixel_count: usize =
-    ihdr.width.checked_mul(ihdr.height).ok_or(ImagineError::Value)?.try_into()?;
+    ihdr.width.checked_mul(ihdr.height).ok_or(ImagineError::CheckedMath)?.try_into()?;
   let mut bitmap: crate::Bitmap<P> = {
     let mut pixels = Vec::new();
     pixels.try_reserve(target_pixel_count)?;

@@ -113,11 +113,11 @@ pub fn bmp_get_nice_header(bytes: &[u8]) -> Result<BmpNiceHeader, ImagineError> 
   //dbg!(v5);
   let width = v5.width.get().unsigned_abs();
   if width == 0 {
-    return Err(ImagineError::Value);
+    return Err(ImagineError::WidthOrHeightZero);
   }
   let height = v5.height.get().unsigned_abs();
   if height == 0 {
-    return Err(ImagineError::Value);
+    return Err(ImagineError::WidthOrHeightZero);
   }
   let origin_top_left = v5.height.get().is_negative();
   let data_format = {
@@ -125,15 +125,15 @@ pub fn bmp_get_nice_header(bytes: &[u8]) -> Result<BmpNiceHeader, ImagineError> 
     let compression = v5.compression.get();
     let pal_start: usize = size_of::<BitmapFileHeader>()
       .checked_add(info_header_size.get().try_into()?)
-      .ok_or(ImagineError::Value)?;
+      .ok_or(ImagineError::CheckedMath)?;
     let pal_entry_count: usize = if v5.colors_used.get() == 0 {
       1_usize.wrapping_shl(u32::from(bits_per_pixel))
     } else {
       v5.colors_used.get().try_into()?
     };
     let pal_end: usize = pal_start
-      .checked_add(pal_entry_count.checked_mul(4).ok_or(ImagineError::Value)?)
-      .ok_or(ImagineError::Value)?;
+      .checked_add(pal_entry_count.checked_mul(4).ok_or(ImagineError::CheckedMath)?)
+      .ok_or(ImagineError::CheckedMath)?;
     match (bits_per_pixel, compression) {
       (1, BI_RGB) => BmpDataFormat::Indexed1 { palette_span: (pal_start, pal_end) },
       (4, BI_RGB) => BmpDataFormat::Indexed4 { palette_span: (pal_start, pal_end) },
@@ -176,7 +176,7 @@ pub fn bmp_get_nice_header(bytes: &[u8]) -> Result<BmpNiceHeader, ImagineError> 
           }
         }
       }
-      _ => return Err(ImagineError::Value),
+      _ => return Err(ImagineError::Parse),
     }
   };
   let data_span = {
@@ -190,7 +190,7 @@ pub fn bmp_get_nice_header(bytes: &[u8]) -> Result<BmpNiceHeader, ImagineError> 
       padded_bytes_per_line(width, v5.bits_per_pixel.get())?
         .checked_mul(height.try_into()?)
         .and_then(|count| data_start.checked_add(count))
-        .ok_or(ImagineError::Value)?
+        .ok_or(ImagineError::CheckedMath)?
     };
     (data_start, data_end)
   };
