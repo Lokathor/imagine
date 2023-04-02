@@ -2,13 +2,13 @@ use walkdir::WalkDir;
 
 #[test]
 #[cfg(all(feature = "alloc"))]
-fn test_bmps_do_not_panic_decoder() {
+fn test_files_do_not_panic_decoder() {
   // iter ALL files in the test folder, even non-png files shouldn't panic it.
-
-  use std::ffi::OsStr;
 
   use imagine::{bmp::bmp_try_bitmap_rgba, Bitmap};
   use pixel_formats::{r32g32b32a32_Sfloat, r8g8b8a8_Unorm};
+  use std::ffi::OsStr;
+
   for entry in WalkDir::new("tests/").into_iter().filter_map(|e| e.ok()) {
     if entry.file_type().is_dir() {
       continue;
