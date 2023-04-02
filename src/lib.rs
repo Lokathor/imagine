@@ -88,10 +88,7 @@ where
     return Ok(bitmap);
   }
   #[cfg(feature = "netpbm")]
-  if let Ok(mut bitmap) = netpbm::netpbm_try_bitmap_rgba(bytes) {
-    if !origin_top_left {
-      bitmap.vertical_flip()
-    }
+  if let Ok(bitmap) = netpbm::netpbm_try_bitmap_rgba(bytes, origin_top_left) {
     return Ok(bitmap);
   }
   Err(ImagineError::Parse)

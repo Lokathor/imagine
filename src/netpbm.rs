@@ -289,7 +289,9 @@ where
 #[inline]
 #[cfg(feature = "alloc")]
 #[cfg_attr(docs_rs, doc(cfg(feature = "alloc")))]
-pub fn netpbm_try_bitmap_rgba<P>(bytes: &[u8]) -> Result<crate::Bitmap<P>, ImagineError>
+pub fn netpbm_try_bitmap_rgba<P>(
+  bytes: &[u8], origin_top_left: bool,
+) -> Result<crate::Bitmap<P>, ImagineError>
 where
   P: Copy + From<r32g32b32a32_Sfloat>,
 {
@@ -309,5 +311,9 @@ where
   netpbm_for_each_rgb(bytes, |p| pixels.push(P::from(r32g32b32a32_Sfloat::from(p))))?;
   let black: P = P::from(r32g32b32a32_Sfloat::OPAQUE_BLACK);
   pixels.resize(target_pixel_count, black);
-  Ok(crate::Bitmap { width: header.width, height: header.height, pixels })
+  let mut bitmap = crate::Bitmap { width: header.width, height: header.height, pixels };
+  if !origin_top_left {
+    bitmap.vertical_flip();
+  }
+  Ok(bitmap)
 }
