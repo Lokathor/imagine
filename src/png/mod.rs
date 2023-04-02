@@ -70,6 +70,18 @@ pub fn png_get_srgb(bytes: &[u8]) -> Option<sRGBIntent> {
   })
 }
 
+/// Gets the gamma info in the PNG, if any
+#[inline]
+pub fn png_get_gamma(bytes: &[u8]) -> Option<u32> {
+  PngRawChunkIter::new(bytes).find_map(|raw_chunk| {
+    let png_chunk = PngChunk::try_from(raw_chunk).ok()?;
+    match png_chunk {
+      PngChunk::gAMA(g) => Some(g),
+      _ => None,
+    }
+  })
+}
+
 /// Gets the palette out of the PNG bytes.
 ///
 /// Each `[u8;3]` in the palette is an `[r8, g8, b8]` color entry.
@@ -189,11 +201,15 @@ where
   use bytemuck::cast_slice;
   use pixel_formats::{r8g8b8_Srgb, r8g8b8a8_Srgb};
 
+  for (n, raw_chunk) in PngRawChunkIter::new(bytes).enumerate() {
+    let chunk_res = PngChunk::try_from(raw_chunk);
+    println!("{n}: {chunk_res:?}");
+  }
+
   let ihdr = png_get_header(bytes).ok_or(ImagineError::Parse)?;
   if ihdr.width > 17_000 || ihdr.height > 17_000 {
     return Err(ImagineError::DimensionsTooLarge);
   }
-  dbg!(ihdr);
 
   let transparent_black: P = P::from(r32g32b32a32_Sfloat::TRANSPARENT_BLACK);
   let target_pixel_count: usize =
@@ -218,10 +234,12 @@ where
     true,
     true,
   );
-  dbg!(_who_cares).ok();
 
   let is_srgb = png_get_srgb(bytes).is_some();
-  dbg!(is_srgb);
+
+  let gamma = png_get_gamma(bytes).unwrap_or(100_000_u32) as f32 / 100_000.0_f32;
+  let gamma_exp = 1.0 / gamma;
+  println!("{gamma_exp}");
 
   let trns: Option<tRNS<'_>> = png_get_transparency(bytes);
   let trns_y = trns.and_then(|trns| trns.try_to_grayscale());
@@ -244,8 +262,21 @@ where
       palette.iter_mut().zip(plte.iter().copied()).enumerate().for_each(
         |(i, (palette, r8g8b8_Unorm { r, g, b }))| {
           let a: u8 = trns.get(i).copied().unwrap_or(u8::MAX);
-          // TODO: Gamma correction should be here!
-          *palette = P::from(r32g32b32a32_Sfloat::from(r8g8b8a8_Unorm { r, g, b, a }))
+          let unorm = r8g8b8a8_Unorm { r, g, b, a };
+          let sfloat = r32g32b32a32_Sfloat::from(unorm);
+          let gamma_corrected = r32g32b32a32_Sfloat {
+            r: sfloat.r.powf(gamma_exp),
+            g: sfloat.g.powf(gamma_exp),
+            b: sfloat.b.powf(gamma_exp),
+            a: sfloat.a,
+          };
+          let pre_multiplied_alpha = r32g32b32a32_Sfloat {
+            r: gamma_corrected.r * gamma_corrected.a,
+            g: gamma_corrected.g * gamma_corrected.a,
+            b: gamma_corrected.b * gamma_corrected.a,
+            a: gamma_corrected.a,
+          };
+          *palette = P::from(pre_multiplied_alpha);
         },
       );
     }
@@ -269,7 +300,20 @@ where
             transparent_black
           } else {
             let y = (y as f32) / (u16::MAX as f32);
-            P::from(r32g32b32a32_Sfloat { r: y, g: y, b: y, a: 1.0 })
+            let sfloat = r32g32b32a32_Sfloat { r: y, g: y, b: y, a: 1.0 };
+            let gamma_corrected = r32g32b32a32_Sfloat {
+              r: sfloat.r.powf(gamma_exp),
+              g: sfloat.g.powf(gamma_exp),
+              b: sfloat.b.powf(gamma_exp),
+              a: sfloat.a,
+            };
+            let pre_multiplied_alpha = r32g32b32a32_Sfloat {
+              r: gamma_corrected.r * gamma_corrected.a,
+              g: gamma_corrected.g * gamma_corrected.a,
+              b: gamma_corrected.b * gamma_corrected.a,
+              a: gamma_corrected.a,
+            };
+            P::from(pre_multiplied_alpha)
           };
         }
       };
@@ -294,9 +338,17 @@ where
           *p = if Some(u16::from(data[0])) == trns_y {
             transparent_black
           } else {
-            // TODO: gamma correction
             let y = u8_replicate_bits(u32::from(ihdr.bit_depth), data[0]);
-            P::from(r32g32b32a32_Sfloat::from(r8g8b8a8_Unorm { r: y, g: y, b: y, a: u8::MAX }))
+            let y = (y as f32) / (u8::MAX as f32);
+            let sfloat = r32g32b32a32_Sfloat { r: y, g: y, b: y, a: 1.0 };
+            let gamma_corrected = r32g32b32a32_Sfloat {
+              r: sfloat.r.powf(gamma_exp),
+              g: sfloat.g.powf(gamma_exp),
+              b: sfloat.b.powf(gamma_exp),
+              a: sfloat.a,
+            };
+            // no alpha multiply, alpha is known 1.0
+            P::from(gamma_corrected)
           };
         }
       };
@@ -307,7 +359,20 @@ where
         if let Some(p) = bitmap.get_mut(x, y) {
           let y = (u16::from_be_bytes([data[0], data[1]]) as f32) / (u16::MAX as f32);
           let a = (u16::from_be_bytes([data[2], data[3]]) as f32) / (u16::MAX as f32);
-          *p = P::from(r32g32b32a32_Sfloat { r: y, g: y, b: y, a });
+          let sfloat = r32g32b32a32_Sfloat { r: y, g: y, b: y, a };
+          let gamma_corrected = r32g32b32a32_Sfloat {
+            r: sfloat.r.powf(gamma_exp),
+            g: sfloat.g.powf(gamma_exp),
+            b: sfloat.b.powf(gamma_exp),
+            a: sfloat.a,
+          };
+          let pre_multiplied_alpha = r32g32b32a32_Sfloat {
+            r: gamma_corrected.r * gamma_corrected.a,
+            g: gamma_corrected.g * gamma_corrected.a,
+            b: gamma_corrected.b * gamma_corrected.a,
+            a: gamma_corrected.a,
+          };
+          *p = P::from(pre_multiplied_alpha);
         }
       };
       ihdr.unfilter_decompressed_data(&mut zlib_buffer, unfilter_op).ok();
@@ -317,7 +382,14 @@ where
         if let Some(p) = bitmap.get_mut(x, y) {
           let y = data[0];
           let a = data[1];
-          *p = P::from(r32g32b32a32_Sfloat::from(r8g8b8a8_Srgb { r: y, g: y, b: y, a }));
+          let gamma_corrected = r32g32b32a32_Sfloat::from(r8g8b8a8_Srgb { r: y, g: y, b: y, a });
+          let pre_multiplied_alpha = r32g32b32a32_Sfloat {
+            r: gamma_corrected.r * gamma_corrected.a,
+            g: gamma_corrected.g * gamma_corrected.a,
+            b: gamma_corrected.b * gamma_corrected.a,
+            a: gamma_corrected.a,
+          };
+          *p = P::from(pre_multiplied_alpha);
         }
       };
       ihdr.unfilter_decompressed_data(&mut zlib_buffer, unfilter_op).ok();
@@ -325,10 +397,22 @@ where
     PngColorType::YA => {
       let unfilter_op = |x: u32, y: u32, data: &[u8]| {
         if let Some(p) = bitmap.get_mut(x, y) {
-          let y = data[0];
-          let a = data[1];
-          // TODO: gamma correction
-          *p = P::from(r32g32b32a32_Sfloat::from(r8g8b8a8_Unorm { r: y, g: y, b: y, a }));
+          let y = (data[0] as f32) / (u8::MAX as f32);
+          let a = (data[1] as f32) / (u8::MAX as f32);
+          let sfloat = r32g32b32a32_Sfloat { r: y, g: y, b: y, a };
+          let gamma_corrected = r32g32b32a32_Sfloat {
+            r: sfloat.r.powf(gamma_exp),
+            g: sfloat.g.powf(gamma_exp),
+            b: sfloat.b.powf(gamma_exp),
+            a: sfloat.a,
+          };
+          let pre_multiplied_alpha = r32g32b32a32_Sfloat {
+            r: gamma_corrected.r * gamma_corrected.a,
+            g: gamma_corrected.g * gamma_corrected.a,
+            b: gamma_corrected.b * gamma_corrected.a,
+            a: gamma_corrected.a,
+          };
+          *p = P::from(pre_multiplied_alpha);
         }
       };
       ihdr.unfilter_decompressed_data(&mut zlib_buffer, unfilter_op).ok();
@@ -346,7 +430,15 @@ where
             let r = (u16::from_be_bytes([data[0], data[1]]) as f32) / (u16::MAX as f32);
             let g = (u16::from_be_bytes([data[2], data[3]]) as f32) / (u16::MAX as f32);
             let b = (u16::from_be_bytes([data[4], data[5]]) as f32) / (u16::MAX as f32);
-            P::from(r32g32b32a32_Sfloat { r, g, b, a: 1.0 })
+            let sfloat = r32g32b32a32_Sfloat { r, g, b, a: 1.0 };
+            let gamma_corrected = r32g32b32a32_Sfloat {
+              r: sfloat.r.powf(gamma_exp),
+              g: sfloat.g.powf(gamma_exp),
+              b: sfloat.b.powf(gamma_exp),
+              a: sfloat.a,
+            };
+            // no alpha multiply, alpha is known 1.0
+            P::from(gamma_corrected)
           };
         }
       };
@@ -361,7 +453,9 @@ where
           *p = if Some([u16::from(r), u16::from(g), u16::from(b)]) == trns_rgb {
             transparent_black
           } else {
-            P::from(r32g32b32a32_Sfloat::from(r8g8b8a8_Srgb { r, g, b, a: u8::MAX }))
+            let gamma_corrected = r32g32b32a32_Sfloat::from(r8g8b8a8_Srgb { r, g, b, a: u8::MAX });
+            // no alpha multiply, alpha is known 1.0
+            P::from(gamma_corrected)
           };
         }
       };
@@ -376,8 +470,18 @@ where
           *p = if Some([u16::from(r), u16::from(g), u16::from(b)]) == trns_rgb {
             transparent_black
           } else {
-            // TODO: gamma correction
-            P::from(r32g32b32a32_Sfloat::from(r8g8b8a8_Unorm { r, g, b, a: u8::MAX }))
+            let r = (data[0] as f32) / (u8::MAX as f32);
+            let g = (data[1] as f32) / (u8::MAX as f32);
+            let b = (data[2] as f32) / (u8::MAX as f32);
+            let sfloat = r32g32b32a32_Sfloat { r, g, b, a: 1.0 };
+            let gamma_corrected = r32g32b32a32_Sfloat {
+              r: sfloat.r.powf(gamma_exp),
+              g: sfloat.g.powf(gamma_exp),
+              b: sfloat.b.powf(gamma_exp),
+              a: sfloat.a,
+            };
+            // no alpha multiply, alpha is known 1.0
+            P::from(gamma_corrected)
           };
         }
       };
@@ -390,7 +494,20 @@ where
           let g = (u16::from_be_bytes([data[2], data[3]]) as f32) / (u16::MAX as f32);
           let b = (u16::from_be_bytes([data[4], data[5]]) as f32) / (u16::MAX as f32);
           let a = (u16::from_be_bytes([data[6], data[7]]) as f32) / (u16::MAX as f32);
-          *p = P::from(r32g32b32a32_Sfloat { r, g, b, a });
+          let sfloat = r32g32b32a32_Sfloat { r, g, b, a };
+          let gamma_corrected = r32g32b32a32_Sfloat {
+            r: sfloat.r.powf(gamma_exp),
+            g: sfloat.g.powf(gamma_exp),
+            b: sfloat.b.powf(gamma_exp),
+            a: sfloat.a,
+          };
+          let pre_multiplied_alpha = r32g32b32a32_Sfloat {
+            r: gamma_corrected.r * gamma_corrected.a,
+            g: gamma_corrected.g * gamma_corrected.a,
+            b: gamma_corrected.b * gamma_corrected.a,
+            a: gamma_corrected.a,
+          };
+          *p = P::from(pre_multiplied_alpha);
         }
       };
       ihdr.unfilter_decompressed_data(&mut zlib_buffer, unfilter_op).ok();
@@ -402,7 +519,14 @@ where
           let g = data[1];
           let b = data[2];
           let a = data[3];
-          *p = P::from(r32g32b32a32_Sfloat::from(r8g8b8a8_Srgb { r, g, b, a }));
+          let gamma_corrected = r32g32b32a32_Sfloat::from(r8g8b8a8_Srgb { r, g, b, a });
+          let pre_multiplied_alpha = r32g32b32a32_Sfloat {
+            r: gamma_corrected.r * gamma_corrected.a,
+            g: gamma_corrected.g * gamma_corrected.a,
+            b: gamma_corrected.b * gamma_corrected.a,
+            a: gamma_corrected.a,
+          };
+          *p = P::from(pre_multiplied_alpha);
         }
       };
       ihdr.unfilter_decompressed_data(&mut zlib_buffer, unfilter_op).ok();
@@ -410,12 +534,24 @@ where
     PngColorType::RGBA => {
       let unfilter_op = |x: u32, y: u32, data: &[u8]| {
         if let Some(p) = bitmap.get_mut(x, y) {
-          let r = data[0];
-          let g = data[1];
-          let b = data[2];
-          let a = data[3];
-          // TODO: gamma correction
-          *p = P::from(r32g32b32a32_Sfloat::from(r8g8b8a8_Unorm { r, g, b, a }));
+          let r = (data[0] as f32) / (u8::MAX as f32);
+          let g = (data[1] as f32) / (u8::MAX as f32);
+          let b = (data[2] as f32) / (u8::MAX as f32);
+          let a = (data[3] as f32) / (u8::MAX as f32);
+          let sfloat = r32g32b32a32_Sfloat { r, g, b, a };
+          let gamma_corrected = r32g32b32a32_Sfloat {
+            r: sfloat.r.powf(gamma_exp),
+            g: sfloat.g.powf(gamma_exp),
+            b: sfloat.b.powf(gamma_exp),
+            a: sfloat.a,
+          };
+          let pre_multiplied_alpha = r32g32b32a32_Sfloat {
+            r: gamma_corrected.r * gamma_corrected.a,
+            g: gamma_corrected.g * gamma_corrected.a,
+            b: gamma_corrected.b * gamma_corrected.a,
+            a: gamma_corrected.a,
+          };
+          *p = P::from(pre_multiplied_alpha);
         }
       };
       ihdr.unfilter_decompressed_data(&mut zlib_buffer, unfilter_op).ok();
