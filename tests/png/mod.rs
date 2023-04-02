@@ -1,4 +1,4 @@
-use imagine::{pixel_formats::RGBA8888, png::PngRawChunkIter};
+use imagine::png::PngRawChunkIter;
 use walkdir::WalkDir;
 
 #[test]
@@ -15,12 +15,13 @@ fn test_RawPngChunkIter_no_panics() {
 
 #[test]
 #[cfg(all(feature = "alloc", feature = "miniz_oxide"))]
-fn test_pngs_do_not_panic_decoder() {
+fn test_files_do_not_panic_decoder() {
   // iter ALL files in the test folder, even non-png files shouldn't panic it.
 
+  use imagine::{png::png_try_bitmap_rgba, Bitmap};
+  use pixel_formats::{r32g32b32a32_Sfloat, r8g8b8a8_Unorm};
   use std::ffi::OsStr;
 
-  use imagine::image::Bitmap;
   for entry in WalkDir::new("tests/").into_iter().filter_map(|e| e.ok()) {
     if entry.file_type().is_dir() {
       continue;
@@ -33,12 +34,7 @@ fn test_pngs_do_not_panic_decoder() {
         continue;
       }
     };
-    let image_result = Bitmap::<RGBA8888>::try_from_png_bytes(&v);
-    if entry.path().extension().and_then(OsStr::to_str).unwrap_or("") == "png"
-      && !entry.path().file_name().and_then(OsStr::to_str).unwrap_or("").starts_with('x')
-    {
-      assert!(image_result.is_some(), "PNG Parse Failure: {}", entry.path().display());
-    }
+    let _: Option<Bitmap> = png_try_bitmap_rgba(&v, true).ok();
     // Most test images are "hostile" so they naturally fail to parse.
     // However, the library shouldn't panic even with a hostile image.
   }

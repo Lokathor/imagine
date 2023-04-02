@@ -2,10 +2,13 @@
 #![allow(unused_imports)]
 
 #[cfg(feature = "alloc")]
-use imagine::image::Bitmap;
+use imagine::Bitmap;
 
 #[cfg(feature = "png")]
 mod png;
+
+#[cfg(feature = "bmp")]
+mod bmp;
 
 #[allow(dead_code)]
 fn rand_bytes(count: usize) -> Vec<u8> {

@@ -2,7 +2,7 @@
 name = "imagine"
 description = "A crate to help with images."
 repository = "https://github.com/Lokathor/imagine"
-version = "0.4.0"
+version = "0.5.0-pre.0"
 edition = "2021"
 license = "Zlib OR Apache-2.0 OR MIT"
 categories = ["encoding", "no-std"]
@@ -10,24 +10,25 @@ categories = ["encoding", "no-std"]
 autoexamples = false
 
 [features]
-default = ["alloc", "png", "miniz_oxide", "bmp", "netpbm"]
-align_pixels = [] # Causes 4-byte pixel structs to be align=4 (normaly they're align=1)
+default = ["alloc", "miniz_oxide", "png", "bmp", "netpbm"]
 alloc = []
 png = [] # Portable Network Graphics
 bmp = [] # Windows Bitmap
-netpbm = ["wide"] # Covers all the Netpbm files: pbm, pgm, ppm, pnm, pam
+netpbm = [] # Covers all the Netpbm files: pbm, pgm, ppm, pnm, pam
 
 [dependencies]
-bytemuck = "1.11"
-bitfrob = "0.2.3"
-miniz_oxide = { version = "0.6", default-features = false, optional = true }
-wide = { version = "0.7.6", default-features = false, optional = true }
+pixel_formats = "0.1.5"
+bytemuck = { version = "1.13.1", features = ["derive", "min_const_generics"] }
+bitfrob = { version = "1.2.0", features= ["track_caller"] }
+miniz_oxide = { version = "0.7.1", default-features = false, optional = true }
+wide = { version = "0.7.8", default-features = false, optional = true }
+pack1 = { version = "0.1.1", features = ["bytemuck"] }
 
 [dev-dependencies]
 getrandom = "0.2.7"
 walkdir = "2.3.2"
-pixels = "0.9"
-winit = "0.26"
+beryllium = "0.12.3"
+ezgl = "0.2.0"
 
 [package.metadata.docs.rs]
 rustdoc-args = ["--cfg","docs_rs"]
@@ -38,5 +39,9 @@ name = "png_chunk_print"
 required-features = ["png"]
 
 [[example]]
-name = "imagine_viewer"
-required-features = ["alloc", "png", "miniz_oxide", "bmp"]
+name = "bmp_print"
+required-features = ["bmp"]
+
+[[example]]
+name = "viewer"
+required-features = ["alloc", "png", "miniz_oxide", "bmp", "netpbm"]
