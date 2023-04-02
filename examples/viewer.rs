@@ -55,7 +55,7 @@ fn main() {
     return;
   }
   let path = std::path::Path::new(&args[1]);
-  print!("Reading `{}`... ", path.display());
+  print!("===Reading `{}`... ", path.display());
   let bytes = match std::fs::read(path) {
     Ok(bytes) => {
       println!("got {} bytes.", bytes.len());
@@ -123,7 +123,7 @@ fn main() {
     gl.enable_framebuffer_srgb(true);
   }
   gl.set_pixel_store_unpack_alignment(1);
-  gl.set_clear_color(0.2, 0.3, 0.3, 1.0);
+  gl.set_clear_color(1.0, 1.0, 1.0, 1.0);
   gl.enable_blend(true);
   gl.set_blend_equation_separate(BlendEquationSeparate::Add, BlendEquationSeparate::Add);
   gl.set_blend_func_separate(
@@ -206,7 +206,7 @@ fn main() {
 
     if let Some(filename) = new_file {
       let path = std::path::Path::new(&filename);
-      print!("Reading `{}`... ", path.display());
+      print!("===Reading `{}`... ", path.display());
       match std::fs::read(path) {
         Ok(bytes) => {
           println!("got {} bytes.", bytes.len());
@@ -216,9 +216,9 @@ fn main() {
                 image = new_image;
                 win.set_title(path.file_name().and_then(OsStr::to_str).unwrap_or("?"));
                 win.set_window_size(image.width as _, image.height as _);
-                println!("image is now ({}, {})", image.width, image.height);
+                println!("Success: image is now ({}, {})", image.width, image.height);
               } else {
-                println!("new_image too large: ({},{})", new_image.width, new_image.height);
+                println!("Error: new_image too large: ({},{})", new_image.width, new_image.height);
               }
               gl.tex_image_2d(
                 Texture2D,
