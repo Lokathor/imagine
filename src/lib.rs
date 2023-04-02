@@ -58,7 +58,7 @@ pub enum sRGBIntent {
   AbsoluteColorimetric,
 }
 
-/// Automatically allocate and fill in a [Bitmap](crate::image::Bitmap).
+/// Automatically allocate and fill in a [Bitmap](crate::Bitmap).
 ///
 /// This will try every format compiled into the library until one of them
 /// works, or will return a parse error if no format works. The order of trying

@@ -278,7 +278,7 @@ where
   Ok(crate::Bitmap { width: header.width, height: header.height, pixels })
 }
 
-/// Automatically allocate and fill in a [Bitmap](crate::image::Bitmap).
+/// Automatically allocate and fill in a [Bitmap](crate::Bitmap).
 ///
 /// This works just like [`netpbm_try_bitmap_rgb`], but automatically adds an
 /// alpha value (full opacity).

@@ -184,7 +184,7 @@ const fn interlaced_pos_to_full_pos(
   }
 }
 
-/// Automatically allocate and fill in a [Bitmap](crate::image::Bitmap).
+/// Automatically allocate and fill in a [Bitmap](crate::Bitmap).
 ///
 /// The output is automatically flipped as necessary so that the output will be
 /// oriented with the origin in the top left.

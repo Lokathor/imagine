@@ -230,7 +230,7 @@ where
   Ok(bitmap)
 }
 
-/// Automatically allocate and fill in a [Bitmap](crate::image::Bitmap).
+/// Automatically allocate and fill in a [Bitmap](crate::Bitmap).
 ///
 /// * Paletted images will automatically get the color from the palette (illegal
 ///   palette index values will be transparent black).
