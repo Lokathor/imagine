@@ -195,16 +195,11 @@ pub fn png_try_bitmap_rgba<P>(
   bytes: &[u8], origin_top_left: bool,
 ) -> Result<crate::Bitmap<P>, ImagineError>
 where
-  P: Copy + From<r32g32b32a32_Sfloat> + core::fmt::Debug,
+  P: Copy + From<r32g32b32a32_Sfloat>,
 {
   use alloc::vec::Vec;
   use bytemuck::cast_slice;
   use pixel_formats::{r8g8b8_Srgb, r8g8b8a8_Srgb};
-
-  for (n, raw_chunk) in PngRawChunkIter::new(bytes).enumerate() {
-    let chunk_res = PngChunk::try_from(raw_chunk);
-    println!("{n}: {chunk_res:?}");
-  }
 
   let ihdr = png_get_header(bytes).ok_or(ImagineError::Parse)?;
   if ihdr.width > 17_000 || ihdr.height > 17_000 {
@@ -239,7 +234,6 @@ where
 
   let gamma = png_get_gamma(bytes).unwrap_or(100_000_u32) as f32 / 100_000.0_f32;
   let gamma_exp = 1.0 / gamma;
-  println!("{gamma_exp}");
 
   let trns: Option<tRNS<'_>> = png_get_transparency(bytes);
   let trns_y = trns.and_then(|trns| trns.try_to_grayscale());

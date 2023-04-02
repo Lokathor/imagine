@@ -1,4 +1,4 @@
-//#![no_std]
+#![no_std]
 #![warn(missing_docs)]
 #![forbid(unsafe_code)]
 #![allow(unused_labels)]
@@ -75,7 +75,7 @@ pub fn try_bitmap_rgba<P>(
   bytes: &[u8], origin_top_left: bool,
 ) -> Result<crate::Bitmap<P>, ImagineError>
 where
-  P: Copy + From<r32g32b32a32_Sfloat> + core::fmt::Debug,
+  P: Copy + From<r32g32b32a32_Sfloat>,
 {
   #[cfg(feature = "png")]
   if let Ok(bitmap) = png::png_try_bitmap_rgba(bytes, origin_top_left) {

@@ -12,7 +12,7 @@ use pixel_formats::r8g8b8a8_Srgb;
 pub struct Bitmap<P = r8g8b8a8_Srgb> {
   pub width: u32,
   pub height: u32,
-  pub pixels: Vec<P>,
+  pub pixels: alloc::vec::Vec<P>,
 }
 #[cfg(feature = "alloc")]
 #[cfg_attr(docs_rs, doc(cfg(feature = "alloc")))]
@@ -45,8 +45,8 @@ impl<P> Bitmap<P> {
 pub struct Palmap<I = u8, P = r8g8b8a8_Srgb> {
   pub width: u32,
   pub height: u32,
-  pub indexes: Vec<I>,
-  pub palette: Vec<P>,
+  pub indexes: alloc::vec::Vec<I>,
+  pub palette: alloc::vec::Vec<P>,
 }
 #[cfg(feature = "alloc")]
 #[cfg_attr(docs_rs, doc(cfg(feature = "alloc")))]
@@ -80,7 +80,7 @@ where
 {
   #[inline]
   fn from(palmap: &Palmap<I, PxIn>) -> Self {
-    let pixels: Vec<PxOut> = palmap
+    let pixels: alloc::vec::Vec<PxOut> = palmap
       .indexes
       .iter()
       .cloned()
