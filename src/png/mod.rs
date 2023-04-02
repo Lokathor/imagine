@@ -253,7 +253,14 @@ where
       palette.iter_mut().zip(plte.iter().copied()).enumerate().for_each(
         |(i, (palette, r8g8b8_Srgb { r, g, b }))| {
           let a: u8 = trns.get(i).copied().unwrap_or(u8::MAX);
-          *palette = P::from(r32g32b32a32_Sfloat::from(r8g8b8a8_Srgb { r, g, b, a }))
+          let gamma_corrected = r32g32b32a32_Sfloat::from(r8g8b8a8_Srgb { r, g, b, a });
+          let pre_multiplied_alpha = r32g32b32a32_Sfloat {
+            r: gamma_corrected.r * gamma_corrected.a,
+            g: gamma_corrected.g * gamma_corrected.a,
+            b: gamma_corrected.b * gamma_corrected.a,
+            a: gamma_corrected.a,
+          };
+          *palette = P::from(pre_multiplied_alpha);
         },
       );
     } else {
