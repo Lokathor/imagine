@@ -7,7 +7,7 @@ fn test_bmps_do_not_panic_decoder() {
 
   use std::ffi::OsStr;
 
-  use imagine::{bitmap::Bitmap, bmp::bmp_try_bitmap_rgba};
+  use imagine::{bmp::bmp_try_bitmap_rgba, Bitmap};
   use pixel_formats::{r32g32b32a32_Sfloat, r8g8b8a8_Unorm};
   for entry in WalkDir::new("tests/").into_iter().filter_map(|e| e.ok()) {
     if entry.file_type().is_dir() {

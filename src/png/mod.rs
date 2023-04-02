@@ -4,12 +4,10 @@
 //!
 //! [png-spec]: https://www.w3.org/TR/2003/REC-PNG-20031110/
 
-use core::fmt::{Debug, Write};
-
+use crate::{sRGBIntent, ImagineError};
 use bitfrob::u8_replicate_bits;
-use pixel_formats::{r8g8b8_Unorm, r8g8b8a8_Unorm};
-
-use crate::sRGBIntent;
+use core::fmt::{Debug, Write};
+use pixel_formats::{r32g32b32a32_Sfloat, r8g8b8_Unorm, r8g8b8a8_Unorm};
 
 // TODO: CRC support for raw chunks is needed later to write PNG data.
 
@@ -76,7 +74,7 @@ pub fn png_get_srgb(bytes: &[u8]) -> Option<sRGBIntent> {
 ///
 /// Each `[u8;3]` in the palette is an `[r8, g8, b8]` color entry.
 #[inline]
-pub fn png_get_palette(bytes: &[u8]) -> Option<&[r8g8b8_Unorm]> {
+pub fn png_get_palette(bytes: &[u8]) -> Option<&[[u8; 3]]> {
   PngRawChunkIter::new(bytes).find_map(|raw_chunk| {
     let png_chunk = PngChunk::try_from(raw_chunk).ok()?;
     let plte = PLTE::try_from(png_chunk).ok()?;
@@ -174,221 +172,258 @@ const fn interlaced_pos_to_full_pos(
   }
 }
 
-#[cfg(all(feature = "alloc", feature = "miniz_oxide"))]
-impl<P> crate::bitmap::Bitmap<P>
+/// Automatically allocate and fill in a [Bitmap](crate::image::Bitmap).
+///
+/// The output is automatically flipped as necessary so that the output will be
+/// oriented with the origin in the top left.
+#[inline]
+#[cfg(feature = "alloc")]
+#[cfg_attr(docs_rs, doc(cfg(feature = "alloc")))]
+pub fn png_try_bitmap_rgba<P>(
+  bytes: &[u8], origin_top_left: bool,
+) -> Result<crate::Bitmap<P>, ImagineError>
 where
-  P: From<r8g8b8a8_Unorm> + Clone,
+  P: Copy + From<r32g32b32a32_Sfloat> + core::fmt::Debug,
 {
-  /// Attempts to make a [Bitmap](crate::image::Bitmap) from PNG bytes.
-  ///
-  /// ## Failure
-  /// Errors include, but are not limited to:
-  /// * No [IHDR] found in the bytes.
-  /// * Allocation failure.
-  ///
-  /// There's currently no specific error reported, you just get `None`.
-  #[cfg_attr(docs_rs, doc(cfg(all(feature = "png", feature = "miniz_oxide"))))]
-  #[allow(clippy::missing_inline_in_public_items)]
-  pub fn try_from_png_bytes(bytes: &[u8]) -> Option<Self> {
-    use alloc::vec::Vec;
-    //
-    let ihdr = match png_get_header(bytes) {
-      Some(ihdr) => ihdr,
-      None => {
-        // No Image Header prevents all further processing.
-        return None;
-      }
-    };
-    let zlib_len = ihdr.get_zlib_decompression_requirement();
-    let mut zlib_buffer: Vec<u8> = Vec::new();
-    zlib_buffer.try_reserve(zlib_len).ok()?;
-    // ferris plz make this into a memset
-    zlib_buffer.resize(zlib_len, 0);
-    match miniz_oxide::inflate::decompress_slice_iter_to_slice(
-      &mut zlib_buffer,
-      png_get_idat(bytes),
-      true,
-      true,
-    ) {
-      Ok(decompression_count) => {
-        if decompression_count < zlib_buffer.len() {
-          // potential a cause for concern, but i guess keep going. We already
-          // put enough zeros into the zlib buffer so we'll be able to unfilter
-          // either way.
-        }
-      }
-      Err(_e) => {
-        // should we cancel with an error? The most likely errors are that
-        // there's not actually Zlib compressed data (so we'd have an image of
-        // zeros) or there's too much Zlib compressed data (in which case we
-        // can maybe proceed with partial results).
-      }
-    }
-    let pixel_count = ihdr.width.checked_mul(ihdr.height)? as usize;
-    let mut pixels: Vec<P> = Vec::new();
-    pixels.try_reserve(pixel_count).ok()?;
-    // ferris plz make this into a memset
-    pixels.resize(pixel_count, r8g8b8a8_Unorm::default().into());
-    let mut image = Self { width: ihdr.width, height: ihdr.height, pixels };
-    let plte: &[r8g8b8_Unorm] = if ihdr.color_type == PngColorType::Index {
-      png_get_palette(bytes).unwrap_or(&[])
-    } else {
-      &[]
-    };
-    let (trns_y, trns_rgb, trns_alphas): (Option<u16>, Option<[u16; 3]>, Option<&[u8]>) = {
-      if let Some(trns) = png_get_transparency(bytes) {
-        (trns.try_to_grayscale(), trns.try_to_rgb(), Some(trns.to_alphas()))
-      } else {
-        (None, None, None)
-      }
-    };
-    let unfilter_op = |x: u32, y: u32, data: &[u8]| {
-      if let Some(p) = image.get_mut(x, y) {
-        match ihdr.color_type {
-          PngColorType::RGB => {
-            let [r, g, b] = if ihdr.bit_depth == 16 {
-              [data[0], data[2], data[4]]
-            } else {
-              [data[0], data[1], data[2]]
-            };
-            let full = if ihdr.bit_depth == 16 {
-              Some([
-                u16::from_be_bytes([data[0], data[1]]),
-                u16::from_be_bytes([data[2], data[3]]),
-                u16::from_be_bytes([data[4], data[5]]),
-              ])
-            } else {
-              Some([data[0] as u16, data[1] as u16, data[2] as u16])
-            };
-            let a = if trns_rgb == full { 0 } else { 255 };
-            *p = r8g8b8a8_Unorm { r, g, b, a }.into();
-          }
-          PngColorType::RGBA => {
-            let [r, g, b, a] = if ihdr.bit_depth == 16 {
-              [data[0], data[2], data[4], data[6]]
-            } else {
-              [data[0], data[1], data[2], data[3]]
-            };
-            *p = r8g8b8a8_Unorm { r, g, b, a }.into();
-          }
-          PngColorType::YA => {
-            let [y, a] = if ihdr.bit_depth == 16 { [data[0], data[2]] } else { [data[0], data[1]] };
-            *p = r8g8b8a8_Unorm { r: y, g: y, b: y, a }.into();
-          }
-          PngColorType::Y => {
-            let y = if ihdr.bit_depth == 16 {
-              data[0]
-            } else {
-              u8_replicate_bits(ihdr.bit_depth as u32, data[0])
-            };
-            let full = if ihdr.bit_depth == 16 {
-              Some(u16::from_be_bytes([data[0], data[1]]))
-            } else {
-              Some(data[0] as u16)
-            };
-            let a = if trns_y == full { 0 } else { 255 };
-            *p = r8g8b8a8_Unorm { r: y, g: y, b: y, a }.into();
-          }
-          PngColorType::Index => {
-            let r8g8b8_Unorm { r, g, b } =
-              *plte.get(data[0] as usize).unwrap_or(&r8g8b8_Unorm::default());
-            let a = if let Some(alphas) = trns_alphas {
-              *alphas.get(data[0] as usize).unwrap_or(&255)
-            } else {
-              255
-            };
-            *p = r8g8b8a8_Unorm { r, g, b, a }.into()
-          }
-        }
-      } else {
-        // attempted out of bounds pixel write, but i guess it doesn't matter?
-      }
-    };
-    if let Err(_e) = ihdr.unfilter_decompressed_data(&mut zlib_buffer, unfilter_op) {
-      // err during unfiltering, do we care?
-    }
-    Some(image)
-  }
-}
+  use alloc::vec::Vec;
+  use bytemuck::cast_slice;
+  use pixel_formats::{r8g8b8_Srgb, r8g8b8a8_Srgb};
 
-#[cfg(all(feature = "alloc", feature = "miniz_oxide"))]
-impl crate::bitmap::Palmap<u8, r8g8b8a8_Unorm> {
-  /// Attempts to make a [Palmap](crate::image::Palmap) from PNG bytes.
-  ///
-  /// ## Failure
-  /// Errors include, but are not limited to:
-  /// * No [IHDR] found in the bytes.
-  /// * The PNG's "color type" field (in the header) is not Index color.
-  /// * Allocation failure.
-  ///
-  /// There's currently no specific error reported, you just get `None`.
-  #[cfg_attr(docs_rs, doc(cfg(all(feature = "png", feature = "miniz_oxide"))))]
-  #[allow(clippy::missing_inline_in_public_items)]
-  pub fn try_from_png_bytes(bytes: &[u8]) -> Option<Self> {
-    use alloc::vec::Vec;
-    //
-    let ihdr = match png_get_header(bytes) {
-      Some(ihdr) => ihdr,
-      None => {
-        // No Image Header prevents all further processing.
-        return None;
-      }
-    };
-    if ihdr.color_type != PngColorType::Index {
-      return None;
-    }
+  let ihdr = png_get_header(bytes).ok_or(ImagineError::Parse)?;
+  if ihdr.width > 17_000 || ihdr.height > 17_000 {
+    return Err(ImagineError::DimensionsTooLarge);
+  }
+  dbg!(ihdr);
+
+  let transparent_black: P = P::from(r32g32b32a32_Sfloat::TRANSPARENT_BLACK);
+  let target_pixel_count: usize =
+    ihdr.width.checked_mul(ihdr.height).ok_or(ImagineError::Value)?.try_into()?;
+  let mut bitmap: crate::Bitmap<P> = {
+    let mut pixels = Vec::new();
+    pixels.try_reserve(target_pixel_count)?;
+    pixels.resize(target_pixel_count, transparent_black);
+    crate::Bitmap { width: ihdr.width, height: ihdr.height, pixels }
+  };
+
+  let mut zlib_buffer: Vec<u8> = {
     let zlib_len = ihdr.get_zlib_decompression_requirement();
     let mut zlib_buffer: Vec<u8> = Vec::new();
-    zlib_buffer.try_reserve(zlib_len).ok()?;
-    // ferris plz make this into a memset
+    zlib_buffer.try_reserve(zlib_len)?;
     zlib_buffer.resize(zlib_len, 0);
-    match miniz_oxide::inflate::decompress_slice_iter_to_slice(
-      &mut zlib_buffer,
-      png_get_idat(bytes),
-      true,
-      true,
-    ) {
-      Ok(decompression_count) => {
-        if decompression_count < zlib_buffer.len() {
-          // potential a cause for concern, but i guess keep going. We already
-          // put enough zeros into the zlib buffer so we'll be able to unfilter
-          // either way.
+    zlib_buffer
+  };
+  let _who_cares = miniz_oxide::inflate::decompress_slice_iter_to_slice(
+    &mut zlib_buffer,
+    png_get_idat(bytes),
+    true,
+    true,
+  );
+  dbg!(_who_cares).ok();
+
+  let is_srgb = png_get_srgb(bytes).is_some();
+  dbg!(is_srgb);
+
+  let trns: Option<tRNS<'_>> = png_get_transparency(bytes);
+  let trns_y = trns.and_then(|trns| trns.try_to_grayscale());
+  let trns_rgb = trns.and_then(|trns| trns.try_to_rgb());
+
+  let mut palette: [P; 256] = [r32g32b32a32_Sfloat::TRANSPARENT_BLACK.into(); 256];
+  if ihdr.color_type == PngColorType::Index {
+    if is_srgb {
+      let plte: &[r8g8b8_Srgb] = cast_slice(png_get_palette(bytes).unwrap_or(&[]));
+      let trns: &[u8] = trns.map(|trns| trns.to_alphas()).unwrap_or(&[]);
+      palette.iter_mut().zip(plte.iter().copied()).enumerate().for_each(
+        |(i, (palette, r8g8b8_Srgb { r, g, b }))| {
+          let a: u8 = trns.get(i).copied().unwrap_or(u8::MAX);
+          *palette = P::from(r32g32b32a32_Sfloat::from(r8g8b8a8_Srgb { r, g, b, a }))
+        },
+      );
+    } else {
+      let plte: &[r8g8b8_Unorm] = cast_slice(png_get_palette(bytes).unwrap_or(&[]));
+      let trns: &[u8] = trns.map(|trns| trns.to_alphas()).unwrap_or(&[]);
+      palette.iter_mut().zip(plte.iter().copied()).enumerate().for_each(
+        |(i, (palette, r8g8b8_Unorm { r, g, b }))| {
+          let a: u8 = trns.get(i).copied().unwrap_or(u8::MAX);
+          // TODO: Gamma correction should be here!
+          *palette = P::from(r32g32b32a32_Sfloat::from(r8g8b8a8_Unorm { r, g, b, a }))
+        },
+      );
+    }
+  };
+
+  match ihdr.color_type {
+    PngColorType::Index => {
+      let unfilter_op = |x: u32, y: u32, data: &[u8]| {
+        if let Some(p) = bitmap.get_mut(x, y) {
+          *p = palette[usize::from(data[0])];
         }
-      }
-      Err(_e) => {
-        // should we cancel with an error? The most likely errors are that
-        // there's not actually Zlib compressed data (so we'd have an image of
-        // zeros) or there's too much Zlib compressed data (in which case we
-        // can maybe proceed with partial results).
-      }
+      };
+      ihdr.unfilter_decompressed_data(&mut zlib_buffer, unfilter_op).ok();
     }
-    let pixel_count = (ihdr.width * ihdr.height) as usize;
-    let mut indexes: Vec<u8> = Vec::new();
-    indexes.try_reserve(pixel_count).ok()?;
-    // ferris plz make this into a memset
-    indexes.resize(pixel_count, 0_u8);
-    let mut palette: Vec<r8g8b8a8_Unorm> = match png_get_palette(bytes) {
-      Some(pal_slice) => pal_slice
-        .iter()
-        .copied()
-        .map(|r8g8b8_Unorm { r, g, b }| r8g8b8a8_Unorm { r, g, b, a: 255 })
-        .collect(),
-      None => return None,
-    };
-    if let Some(tRNS(bytes)) = png_get_transparency(bytes) {
-      palette.iter_mut().zip(bytes.iter()).for_each(|(p, b)| p.a = *b)
+    PngColorType::Y if ihdr.bit_depth == 16 => {
+      // depth 16 needs separate handling from 8 or less.
+      let unfilter_op = |x: u32, y: u32, data: &[u8]| {
+        if let Some(p) = bitmap.get_mut(x, y) {
+          let y = u16::from_be_bytes([data[0], data[1]]);
+          *p = if Some(y) == trns_y {
+            transparent_black
+          } else {
+            let y = (y as f32) / (u16::MAX as f32);
+            P::from(r32g32b32a32_Sfloat { r: y, g: y, b: y, a: 1.0 })
+          };
+        }
+      };
+      ihdr.unfilter_decompressed_data(&mut zlib_buffer, unfilter_op).ok();
     }
-    let mut palmap = Self { width: ihdr.width, height: ihdr.height, indexes, palette };
-    let unfilter_op = |x: u32, y: u32, data: &[u8]| {
-      if let Some(i) = palmap.get_mut(x, y) {
-        *i = data[0];
-      } else {
-        // attempted out of bounds pixel write, but i guess it doesn't matter?
-      }
-    };
-    if let Err(_e) = ihdr.unfilter_decompressed_data(&mut zlib_buffer, unfilter_op) {
-      // err during unfiltering, do we care?
+    PngColorType::Y if is_srgb => {
+      let unfilter_op = |x: u32, y: u32, data: &[u8]| {
+        if let Some(p) = bitmap.get_mut(x, y) {
+          *p = if Some(u16::from(data[0])) == trns_y {
+            transparent_black
+          } else {
+            let y = u8_replicate_bits(u32::from(ihdr.bit_depth), data[0]);
+            P::from(r32g32b32a32_Sfloat::from(r8g8b8a8_Srgb { r: y, g: y, b: y, a: u8::MAX }))
+          };
+        }
+      };
+      ihdr.unfilter_decompressed_data(&mut zlib_buffer, unfilter_op).ok();
     }
-    Some(palmap)
+    PngColorType::Y => {
+      let unfilter_op = |x: u32, y: u32, data: &[u8]| {
+        if let Some(p) = bitmap.get_mut(x, y) {
+          *p = if Some(u16::from(data[0])) == trns_y {
+            transparent_black
+          } else {
+            // TODO: gamma correction
+            let y = u8_replicate_bits(u32::from(ihdr.bit_depth), data[0]);
+            P::from(r32g32b32a32_Sfloat::from(r8g8b8a8_Unorm { r: y, g: y, b: y, a: u8::MAX }))
+          };
+        }
+      };
+      ihdr.unfilter_decompressed_data(&mut zlib_buffer, unfilter_op).ok();
+    }
+    PngColorType::YA if ihdr.bit_depth == 16 => {
+      let unfilter_op = |x: u32, y: u32, data: &[u8]| {
+        if let Some(p) = bitmap.get_mut(x, y) {
+          let y = (u16::from_be_bytes([data[0], data[1]]) as f32) / (u16::MAX as f32);
+          let a = (u16::from_be_bytes([data[2], data[3]]) as f32) / (u16::MAX as f32);
+          *p = P::from(r32g32b32a32_Sfloat { r: y, g: y, b: y, a });
+        }
+      };
+      ihdr.unfilter_decompressed_data(&mut zlib_buffer, unfilter_op).ok();
+    }
+    PngColorType::YA if is_srgb => {
+      let unfilter_op = |x: u32, y: u32, data: &[u8]| {
+        if let Some(p) = bitmap.get_mut(x, y) {
+          let y = data[0];
+          let a = data[1];
+          *p = P::from(r32g32b32a32_Sfloat::from(r8g8b8a8_Srgb { r: y, g: y, b: y, a }));
+        }
+      };
+      ihdr.unfilter_decompressed_data(&mut zlib_buffer, unfilter_op).ok();
+    }
+    PngColorType::YA => {
+      let unfilter_op = |x: u32, y: u32, data: &[u8]| {
+        if let Some(p) = bitmap.get_mut(x, y) {
+          let y = data[0];
+          let a = data[1];
+          // TODO: gamma correction
+          *p = P::from(r32g32b32a32_Sfloat::from(r8g8b8a8_Unorm { r: y, g: y, b: y, a }));
+        }
+      };
+      ihdr.unfilter_decompressed_data(&mut zlib_buffer, unfilter_op).ok();
+    }
+    PngColorType::RGB if ihdr.bit_depth == 16 => {
+      // depth 16 needs separate handling from 8 or less.
+      let unfilter_op = |x: u32, y: u32, data: &[u8]| {
+        if let Some(p) = bitmap.get_mut(x, y) {
+          let r = u16::from_be_bytes([data[0], data[1]]);
+          let g = u16::from_be_bytes([data[2], data[3]]);
+          let b = u16::from_be_bytes([data[4], data[5]]);
+          *p = if Some([r, g, b]) == trns_rgb {
+            transparent_black
+          } else {
+            let r = (u16::from_be_bytes([data[0], data[1]]) as f32) / (u16::MAX as f32);
+            let g = (u16::from_be_bytes([data[2], data[3]]) as f32) / (u16::MAX as f32);
+            let b = (u16::from_be_bytes([data[4], data[5]]) as f32) / (u16::MAX as f32);
+            P::from(r32g32b32a32_Sfloat { r, g, b, a: 1.0 })
+          };
+        }
+      };
+      ihdr.unfilter_decompressed_data(&mut zlib_buffer, unfilter_op).ok();
+    }
+    PngColorType::RGB if is_srgb => {
+      let unfilter_op = |x: u32, y: u32, data: &[u8]| {
+        if let Some(p) = bitmap.get_mut(x, y) {
+          let r = data[0];
+          let g = data[1];
+          let b = data[2];
+          *p = if Some([u16::from(r), u16::from(g), u16::from(b)]) == trns_rgb {
+            transparent_black
+          } else {
+            P::from(r32g32b32a32_Sfloat::from(r8g8b8a8_Srgb { r, g, b, a: u8::MAX }))
+          };
+        }
+      };
+      ihdr.unfilter_decompressed_data(&mut zlib_buffer, unfilter_op).ok();
+    }
+    PngColorType::RGB => {
+      let unfilter_op = |x: u32, y: u32, data: &[u8]| {
+        if let Some(p) = bitmap.get_mut(x, y) {
+          let r = data[0];
+          let g = data[1];
+          let b = data[2];
+          *p = if Some([u16::from(r), u16::from(g), u16::from(b)]) == trns_rgb {
+            transparent_black
+          } else {
+            // TODO: gamma correction
+            P::from(r32g32b32a32_Sfloat::from(r8g8b8a8_Unorm { r, g, b, a: u8::MAX }))
+          };
+        }
+      };
+      ihdr.unfilter_decompressed_data(&mut zlib_buffer, unfilter_op).ok();
+    }
+    PngColorType::RGBA if ihdr.bit_depth == 16 => {
+      let unfilter_op = |x: u32, y: u32, data: &[u8]| {
+        if let Some(p) = bitmap.get_mut(x, y) {
+          let r = (u16::from_be_bytes([data[0], data[1]]) as f32) / (u16::MAX as f32);
+          let g = (u16::from_be_bytes([data[2], data[3]]) as f32) / (u16::MAX as f32);
+          let b = (u16::from_be_bytes([data[4], data[5]]) as f32) / (u16::MAX as f32);
+          let a = (u16::from_be_bytes([data[6], data[7]]) as f32) / (u16::MAX as f32);
+          *p = P::from(r32g32b32a32_Sfloat { r, g, b, a });
+        }
+      };
+      ihdr.unfilter_decompressed_data(&mut zlib_buffer, unfilter_op).ok();
+    }
+    PngColorType::RGBA if is_srgb => {
+      let unfilter_op = |x: u32, y: u32, data: &[u8]| {
+        if let Some(p) = bitmap.get_mut(x, y) {
+          let r = data[0];
+          let g = data[1];
+          let b = data[2];
+          let a = data[3];
+          *p = P::from(r32g32b32a32_Sfloat::from(r8g8b8a8_Srgb { r, g, b, a }));
+        }
+      };
+      ihdr.unfilter_decompressed_data(&mut zlib_buffer, unfilter_op).ok();
+    }
+    PngColorType::RGBA => {
+      let unfilter_op = |x: u32, y: u32, data: &[u8]| {
+        if let Some(p) = bitmap.get_mut(x, y) {
+          let r = data[0];
+          let g = data[1];
+          let b = data[2];
+          let a = data[3];
+          // TODO: gamma correction
+          *p = P::from(r32g32b32a32_Sfloat::from(r8g8b8a8_Unorm { r, g, b, a }));
+        }
+      };
+      ihdr.unfilter_decompressed_data(&mut zlib_buffer, unfilter_op).ok();
+    }
   }
+
+  if !origin_top_left {
+    bitmap.vertical_flip();
+  }
+  Ok(bitmap)
 }

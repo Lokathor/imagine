@@ -13,18 +13,24 @@
 
 //! A crate to work with image data.
 
-mod ascii_array;
-mod error;
-mod util;
-
-pub use error::*;
-
 #[cfg(feature = "alloc")]
 extern crate alloc;
 
+mod ascii_array;
+mod borrowed_bitmap;
+mod error;
+mod util;
+
+pub use self::{borrowed_bitmap::*, error::*};
+
+use pixel_formats::*;
+
 #[cfg(feature = "alloc")]
 #[cfg_attr(docs_rs, doc(cfg(feature = "alloc")))]
-pub mod bitmap;
+mod alloc_bitmap;
+#[cfg(feature = "alloc")]
+#[cfg_attr(docs_rs, doc(cfg(feature = "alloc")))]
+pub use self::alloc_bitmap::*;
 
 #[cfg(feature = "png")]
 #[cfg_attr(docs_rs, doc(cfg(feature = "png")))]
@@ -67,10 +73,14 @@ pub enum sRGBIntent {
 #[cfg_attr(docs_rs, doc(cfg(feature = "alloc")))]
 pub fn try_bitmap_rgba<P>(
   bytes: &[u8], origin_top_left: bool,
-) -> Result<crate::bitmap::Bitmap<P>, ImagineError>
+) -> Result<crate::Bitmap<P>, ImagineError>
 where
-  P: Copy + From<pixel_formats::r32g32b32a32_Sfloat>,
+  P: Copy + From<r32g32b32a32_Sfloat> + core::fmt::Debug,
 {
+  #[cfg(feature = "png")]
+  if let Ok(bitmap) = png::png_try_bitmap_rgba(bytes, origin_top_left) {
+    return Ok(bitmap);
+  }
   #[cfg(feature = "bmp")]
   if let Ok(bitmap) = bmp::bmp_try_bitmap_rgba(bytes, origin_top_left) {
     return Ok(bitmap);

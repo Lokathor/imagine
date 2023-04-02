@@ -32,7 +32,7 @@ impl<'b> TryFrom<PngRawChunk<'b>> for PngChunk<'b> {
         // this can fail, so use `return` to avoid the outer Ok()
         return IHDR::try_from(raw.data).map(PngChunk::IHDR).map_err(|_| raw);
       }
-      PngRawChunkType::PLTE => match bytemuck::try_cast_slice::<u8, r8g8b8_Unorm>(raw.data) {
+      PngRawChunkType::PLTE => match bytemuck::try_cast_slice::<u8, [u8; 3]>(raw.data) {
         Ok(entries) => PngChunk::PLTE(PLTE::from(entries)),
         Err(_) => return Err(raw),
       },

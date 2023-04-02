@@ -9,10 +9,10 @@ use beryllium::{
 };
 use bytemuck::cast_slice;
 use ezgl::{
-  gl_constants::GL_COLOR_BUFFER_BIT, BufferTarget::*, BufferUsageHint::*, DrawMode, EzGl,
-  MagFilter, MinFilter, TextureTarget::*, TextureWrap,
+  gl_constants::GL_COLOR_BUFFER_BIT, BlendEquationSeparate, BlendFuncSeparate, BufferTarget::*,
+  BufferUsageHint::*, DrawMode, EzGl, MagFilter, MinFilter, TextureTarget::*, TextureWrap,
 };
-use imagine::{bitmap::Bitmap, try_bitmap_rgba};
+use imagine::{try_bitmap_rgba, Bitmap};
 use pixel_formats::*;
 
 const USE_GLES: bool = cfg!(target_arch = "aarch64") || cfg!(target_arch = "arm");
@@ -124,6 +124,14 @@ fn main() {
   }
   gl.set_pixel_store_unpack_alignment(1);
   gl.set_clear_color(0.2, 0.3, 0.3, 1.0);
+  gl.enable_blend(true);
+  gl.set_blend_equation_separate(BlendEquationSeparate::Add, BlendEquationSeparate::Add);
+  gl.set_blend_func_separate(
+    BlendFuncSeparate::One,
+    BlendFuncSeparate::OneMinusSrcAlpha,
+    BlendFuncSeparate::One,
+    BlendFuncSeparate::OneMinusSrcAlpha,
+  );
 
   let vao = gl.gen_vertex_array().unwrap();
   gl.bind_vertex_array(&vao);
@@ -172,7 +180,7 @@ fn main() {
     0,
     image.width.try_into().unwrap(),
     image.height.try_into().unwrap(),
-    cast_slice::<_, r8g8b8a8_Srgb>(&image.pixels),
+    &image.pixels,
   );
   gl.generate_mipmap(Texture2D);
 

@@ -7,11 +7,11 @@ use super::*;
 /// If you want to have a paletted image with transparency then the transparency
 /// info goes in a separate transparency chunk.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct PLTE<'b>(&'b [r8g8b8_Unorm]);
-impl<'b> From<&'b [r8g8b8_Unorm]> for PLTE<'b> {
+pub struct PLTE<'b>(&'b [[u8; 3]]);
+impl<'b> From<&'b [[u8; 3]]> for PLTE<'b> {
   #[inline]
   #[must_use]
-  fn from(entries: &'b [r8g8b8_Unorm]) -> Self {
+  fn from(entries: &'b [[u8; 3]]) -> Self {
     Self(entries)
   }
 }
@@ -35,7 +35,7 @@ impl Debug for PLTE<'_> {
 impl<'b> PLTE<'b> {
   /// Gets the entries as a slice.
   #[inline]
-  pub fn entries(&self) -> &'b [r8g8b8_Unorm] {
+  pub fn entries(&self) -> &'b [[u8; 3]] {
     self.0
   }
 }
