@@ -68,6 +68,8 @@ pub enum sRGBIntent {
 ///
 /// The output image will automatically be vertically flipped as necessary to
 /// respect the `origin_top_left` value given.
+///
+/// The output image data will use pre-multiplied alpha.
 #[inline]
 #[cfg(feature = "alloc")]
 #[cfg_attr(docs_rs, doc(cfg(feature = "alloc")))]
