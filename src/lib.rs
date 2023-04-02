@@ -16,14 +16,14 @@
 #[cfg(feature = "alloc")]
 extern crate alloc;
 
+use pixel_formats::*;
+
 mod ascii_array;
-mod borrowed_bitmap;
 mod error;
 mod util;
 
+mod borrowed_bitmap;
 pub use self::{borrowed_bitmap::BorrowedBitmap, error::*};
-
-use pixel_formats::*;
 
 #[cfg(feature = "alloc")]
 #[cfg_attr(docs_rs, doc(cfg(feature = "alloc")))]
