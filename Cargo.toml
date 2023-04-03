@@ -6,6 +6,7 @@ version = "0.5.0"
 edition = "2021"
 license = "Zlib OR Apache-2.0 OR MIT"
 categories = ["encoding", "no-std"]
+exclude = ["/tests"]
 
 autoexamples = false
 
