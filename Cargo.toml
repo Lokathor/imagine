@@ -13,18 +13,20 @@ autoexamples = false
 [features]
 default = ["alloc", "miniz_oxide", "png", "bmp", "netpbm"]
 alloc = []
-png = ["png_filters"] # Portable Network Graphics
-bmp = [] # Windows Bitmap
+png = ["png_filters", "bitfrob"] # Portable Network Graphics
+bmp = ["bitfrob", "pack1"] # Windows Bitmap
 netpbm = [] # Covers all the Netpbm files: pbm, pgm, ppm, pnm, pam
 
 [dependencies]
 pixel_formats = "0.1.5"
-png_filters = { version = "0.1", optional = true }
 bytemuck = { version = "1.13.1", features = ["derive", "min_const_generics"] }
-bitfrob = { version = "1.3.0", features= ["track_caller"] }
+
+png_filters = { version = "0.1", optional = true }
+bitfrob = { version = "1.3.0", features= ["track_caller"], optional = true }
 miniz_oxide = { version = "0.7.1", default-features = false, optional = true }
-wide = { version = "0.7.8", default-features = false, optional = true }
-pack1 = { version = "0.1.1", features = ["bytemuck"] }
+pack1 = { version = "0.1.1", features = ["bytemuck"], optional = true }
+
+#wide = { version = "0.7.8", default-features = false, optional = true }
 
 [dev-dependencies]
 getrandom = "0.2.7"
