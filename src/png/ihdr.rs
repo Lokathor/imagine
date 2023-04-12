@@ -1,3 +1,5 @@
+use bitfrob::{u8_bit_split_1x8_rev, u8_bit_split_2x4_rev, u8_bit_split_4x2_rev};
+
 use super::*;
 
 /// The types of color that PNG supports.
@@ -168,57 +170,42 @@ impl IHDR {
     let full_width = self.width;
     match self.bit_depth {
       1 => {
-        let full_data: u8 = data[0];
-        let mut mask = 0b1000_0000;
-        let mut down_shift = 7;
-        for plus_x in 0..8 {
+        for (plus_x, pix) in u8_bit_split_1x8_rev(data[0]).into_iter().enumerate() {
           let (image_x, image_y): (u32, u32) =
-            interlaced_pos_to_full_pos(image_level, reduced_x * 8 + plus_x, reduced_y);
+            interlaced_pos_to_full_pos(image_level, reduced_x * 8 + (plus_x as u32), reduced_y);
           if image_x >= full_width {
             // if we've gone outside the image's bounds then we're looking at
             // padding bits and we cancel the rest of the outputs in this
             // call of the function.
             return;
           }
-          op(image_x, image_y, &[(full_data & mask) >> down_shift]);
-          mask >>= 1;
-          down_shift -= 1;
+          op(image_x, image_y, &[pix]);
         }
       }
       2 => {
-        let full_data: u8 = data[0];
-        let mut mask = 0b1100_0000;
-        let mut down_shift = 6;
-        for plus_x in 0..4 {
+        for (plus_x, pix) in u8_bit_split_2x4_rev(data[0]).into_iter().enumerate() {
           let (image_x, image_y) =
-            interlaced_pos_to_full_pos(image_level, reduced_x * 4 + plus_x, reduced_y);
+            interlaced_pos_to_full_pos(image_level, reduced_x * 4 + (plus_x as u32), reduced_y);
           if image_x >= full_width {
             // if we've gone outside the image's bounds then we're looking at
             // padding bits and we cancel the rest of the outputs in this
             // call of the function.
             return;
           }
-          op(image_x, image_y, &[(full_data & mask) >> down_shift]);
-          mask >>= 2;
-          down_shift -= 2;
+          op(image_x, image_y, &[pix]);
         }
       }
       4 => {
-        let full_data: u8 = data[0];
-        let mut mask = 0b1111_0000;
-        let mut down_shift = 4;
-        for plus_x in 0..2 {
+        for (plus_x, pix) in u8_bit_split_4x2_rev(data[0]).into_iter().enumerate() {
           let (image_x, image_y) =
-            interlaced_pos_to_full_pos(image_level, reduced_x * 2 + plus_x, reduced_y);
+            interlaced_pos_to_full_pos(image_level, reduced_x * 2 + (plus_x as u32), reduced_y);
           if image_x >= full_width {
             // if we've gone outside the image's bounds then we're looking at
             // padding bits and we cancel the rest of the outputs in this
             // call of the function.
             return;
           }
-          op(image_x, image_y, &[(full_data & mask) >> down_shift]);
-          mask >>= 4;
-          down_shift -= 4;
+          op(image_x, image_y, &[pix]);
         }
       }
       8 | 16 => {
