@@ -245,35 +245,6 @@ impl IHDR {
       return Err(());
     }
 
-    // filtering is per byte within a pixel when pixels are more than 1 byte
-    // each, and per byte when pixels are 1 byte or less.
-    let filter_chunk_size = match self.color_type {
-      PngColorType::Y => match self.bit_depth {
-        16 => 2,
-        8 | 4 | 2 | 1 => 1,
-        _ => return Err(()),
-      },
-      PngColorType::RGB => match self.bit_depth {
-        8 => 3,
-        16 => 6,
-        _ => return Err(()),
-      },
-      PngColorType::Index => match self.bit_depth {
-        8 | 4 | 2 | 1 => 1,
-        _ => return Err(()),
-      },
-      PngColorType::YA => match self.bit_depth {
-        8 => 2,
-        16 => 4,
-        _ => return Err(()),
-      },
-      PngColorType::RGBA => match self.bit_depth {
-        8 => 4,
-        16 => 8,
-        _ => return Err(()),
-      },
-    };
-
     // The image is either interlaced or not:
     // * when interlaced, we will work through "reduced images" 1 through 7.
     // * then not interlaced, we will use just the main image.
@@ -301,208 +272,83 @@ impl IHDR {
       let bytes_per_filterline = self.bytes_per_filterline(reduced_width);
       let bytes_used_this_image = bytes_per_filterline.saturating_mul(reduced_height as _);
 
-      let mut row_iter = if decompressed.len() < bytes_used_this_image {
+      let (these_bytes, bytes_per_filterline) = if decompressed.len() < bytes_used_this_image {
         return Err(());
       } else {
         let (these_bytes, more_bytes) = decompressed.split_at_mut(bytes_used_this_image);
         decompressed = more_bytes;
-        these_bytes
-          .chunks_exact_mut(bytes_per_filterline)
-          .map(|chunk| {
-            let (f, pixels) = chunk.split_at_mut(1);
-            (&mut f[0], pixels)
-          })
-          .enumerate()
-          .take(reduced_height as usize)
-          .map(|(r_y, (f, pixels))| (r_y as u32, f, pixels))
+        (these_bytes, bytes_per_filterline)
       };
 
-      // The first line of each image has special handling because filters can
-      // refer to the previous line, but for the first line the "previous line" is
-      // an implied zero.
-      let mut b_pixels = if let Some((reduced_y, f, pixels)) = row_iter.next() {
-        let mut p_it =
-          pixels.chunks_exact_mut(filter_chunk_size).enumerate().map(|(r_x, d)| (r_x as u32, d));
-        match f {
-          1 => {
-            // Sub
-            let (reduced_x, pixel): (u32, &mut [u8]) = p_it.next().unwrap();
-            self.send_out_pixel(image_level, reduced_x, reduced_y, pixel, &mut op);
-            let mut a_pixel = pixel;
-            for (reduced_x, pixel) in p_it {
-              a_pixel
-                .iter()
-                .copied()
-                .zip(pixel.iter_mut())
-                .for_each(|(a, p)| *p = p.wrapping_add(a));
-              self.send_out_pixel(image_level, reduced_x, reduced_y, pixel, &mut op);
-              //
-              a_pixel = pixel;
-            }
-          }
-          3 => {
-            // Average
-            let (reduced_x, pixel): (u32, &mut [u8]) = p_it.next().unwrap();
-            self.send_out_pixel(image_level, reduced_x, reduced_y, pixel, &mut op);
-            let mut a_pixel = pixel;
-            for (reduced_x, pixel) in p_it {
-              // the `b` is always 0, so we elide it from the computation
-              a_pixel
-                .iter()
-                .copied()
-                .zip(pixel.iter_mut())
-                .for_each(|(a, p)| *p = p.wrapping_add(a / 2));
-              self.send_out_pixel(image_level, reduced_x, reduced_y, pixel, &mut op);
-              //
-              a_pixel = pixel;
-            }
-          }
-          4 => {
-            // Paeth
-            let (reduced_x, pixel): (u32, &mut [u8]) = p_it.next().unwrap();
-            self.send_out_pixel(image_level, reduced_x, reduced_y, pixel, &mut op);
-            let mut a_pixel = pixel;
-            for (reduced_x, pixel) in p_it {
-              // the `b` and `c` are both always 0
-              a_pixel
-                .iter()
-                .copied()
-                .zip(pixel.iter_mut())
-                .for_each(|(a, p)| *p = p.wrapping_add(paeth_predict(a, 0, 0)));
-              self.send_out_pixel(image_level, reduced_x, reduced_y, pixel, &mut op);
-              //
-              a_pixel = pixel;
-            }
-          }
-          _ => {
-            for (reduced_x, pixel) in p_it {
-              // None and Up
-              self.send_out_pixel(image_level, reduced_x, reduced_y, pixel, &mut op);
-            }
-          }
-        }
-        *f = 0;
-        pixels
-      } else {
-        unreachable!("we already know that this image is at least 1 row");
+      // first just unfilter in place.
+      let row_iter = these_bytes.chunks_exact_mut(bytes_per_filterline);
+      match self.color_type {
+        PngColorType::Y => match self.bit_depth {
+          16 => png_filters::unfilter_lines::<2>(row_iter),
+          8 | 4 | 2 | 1 => png_filters::unfilter_lines::<1>(row_iter),
+          _ => return Err(()),
+        },
+        PngColorType::RGB => match self.bit_depth {
+          8 => png_filters::unfilter_lines::<3>(row_iter),
+          16 => png_filters::unfilter_lines::<6>(row_iter),
+          _ => return Err(()),
+        },
+        PngColorType::Index => match self.bit_depth {
+          8 | 4 | 2 | 1 => png_filters::unfilter_lines::<1>(row_iter),
+          _ => return Err(()),
+        },
+        PngColorType::YA => match self.bit_depth {
+          8 => png_filters::unfilter_lines::<2>(row_iter),
+          16 => png_filters::unfilter_lines::<4>(row_iter),
+          _ => return Err(()),
+        },
+        PngColorType::RGBA => match self.bit_depth {
+          8 => png_filters::unfilter_lines::<4>(row_iter),
+          16 => png_filters::unfilter_lines::<8>(row_iter),
+          _ => return Err(()),
+        },
       };
 
-      // Now that we have a previous line worth of data, all the filters will work
-      // normally for the rest of the image.
-      for (reduced_y, f, pixels) in row_iter {
-        let mut p_it =
-          pixels.chunks_exact_mut(filter_chunk_size).enumerate().map(|(r_x, d)| (r_x as u32, d));
-        let b_it = b_pixels.chunks_exact(filter_chunk_size);
-        match f {
-          1 => {
-            // Sub filter
-            let (reduced_x, pixel): (u32, &mut [u8]) = p_it.next().unwrap();
-            self.send_out_pixel(image_level, reduced_x, reduced_y, pixel, &mut op);
-            let mut a_pixel = pixel;
-            for (reduced_x, pixel) in p_it {
-              a_pixel
-                .iter()
-                .copied()
-                .zip(pixel.iter_mut())
-                .for_each(|(a, p)| *p = p.wrapping_add(a));
-              self.send_out_pixel(image_level, reduced_x, reduced_y, pixel, &mut op);
-              //
-              a_pixel = pixel;
-            }
-          }
-          2 => {
-            // Up filter
-            for ((reduced_x, pixel), b_pixel) in p_it.zip(b_it) {
-              b_pixel
-                .iter()
-                .copied()
-                .zip(pixel.iter_mut())
-                .for_each(|(b, p)| *p = p.wrapping_add(b));
-              //
-              self.send_out_pixel(image_level, reduced_x, reduced_y, pixel, &mut op);
-            }
-          }
-          3 => {
-            // Average filter
-            let mut pb_it = p_it.zip(b_it).map(|((r_x, p), b)| (r_x, p, b));
-            let (reduced_x, pixel, b_pixel) = pb_it.next().unwrap();
-            pixel
-              .iter_mut()
-              .zip(b_pixel.iter().copied())
-              .for_each(|(p, b)| *p = p.wrapping_add(b / 2));
-            self.send_out_pixel(image_level, reduced_x, reduced_y, pixel, &mut op);
-            let mut a_pixel: &[u8] = pixel;
-            for (reduced_x, pixel, b_pixel) in pb_it {
-              a_pixel.iter().copied().zip(b_pixel.iter().copied()).zip(pixel.iter_mut()).for_each(
-                |((a, b), p)| {
-                  *p = p.wrapping_add(((a as u32 + b as u32) / 2) as u8);
-                },
-              );
-              self.send_out_pixel(image_level, reduced_x, reduced_y, pixel, &mut op);
-              //
-              a_pixel = pixel;
-            }
-          }
-          4 => {
-            // Paeth filter
-            let mut pb_it = p_it.zip(b_it).map(|((r_x, p), b)| (r_x, p, b));
-            let (reduced_x, pixel, b_pixel) = pb_it.next().unwrap();
-            pixel.iter_mut().zip(b_pixel.iter().copied()).for_each(|(p, b)| {
-              *p = p.wrapping_add(paeth_predict(0, b, 0));
-            });
-            self.send_out_pixel(image_level, reduced_x, reduced_y, pixel, &mut op);
-            let mut a_pixel = pixel;
-            let mut c_pixel = b_pixel;
-            for (reduced_x, pixel, b_pixel) in pb_it {
-              a_pixel
-                .iter()
-                .copied()
-                .zip(b_pixel.iter().copied())
-                .zip(c_pixel.iter().copied())
-                .zip(pixel.iter_mut())
-                .for_each(|(((a, b), c), p)| {
-                  *p = p.wrapping_add(paeth_predict(a, b, c));
-                });
-              self.send_out_pixel(image_level, reduced_x, reduced_y, pixel, &mut op);
-              //
-              a_pixel = pixel;
-              c_pixel = b_pixel;
-            }
-          }
-          _ => {
-            for (reduced_x, pixel) in p_it {
-              // No Filter, or unknown filter, have no alterations.
-              self.send_out_pixel(image_level, reduced_x, reduced_y, pixel, &mut op);
-            }
-          }
-        }
-        b_pixels = pixels;
-      }
+      // then place all the pixels.
+      let filter_chunk_size = match self.color_type {
+        PngColorType::Y => match self.bit_depth {
+          16 => 2,
+          8 | 4 | 2 | 1 => 1,
+          _ => return Err(()),
+        },
+        PngColorType::RGB => match self.bit_depth {
+          8 => 3,
+          16 => 6,
+          _ => return Err(()),
+        },
+        PngColorType::Index => match self.bit_depth {
+          8 | 4 | 2 | 1 => 1,
+          _ => return Err(()),
+        },
+        PngColorType::YA => match self.bit_depth {
+          8 => 2,
+          16 => 4,
+          _ => return Err(()),
+        },
+        PngColorType::RGBA => match self.bit_depth {
+          8 => 4,
+          16 => 8,
+          _ => return Err(()),
+        },
+      };
+      these_bytes
+        .chunks_exact(bytes_per_filterline)
+        .enumerate()
+        .flat_map(|(y, line)| {
+          let (_, line) = line.split_first().unwrap();
+          line.chunks_exact(filter_chunk_size).enumerate().map(move |(x, px)| (x, y, px))
+        })
+        .for_each(|(reduced_, reduced_y, data)| {
+          self.send_out_pixel(image_level, reduced_ as _, reduced_y as _, data, &mut op)
+        });
     }
 
     //
     Ok(())
-  }
-}
-
-#[inline]
-#[must_use]
-const fn paeth_predict(a: u8, b: u8, c: u8) -> u8 {
-  let a_ = a as i32;
-  let b_ = b as i32;
-  let c_ = c as i32;
-  let p: i32 = a_ + b_ - c_;
-  let pa = (p - a_).abs();
-  let pb = (p - b_).abs();
-  let pc = (p - c_).abs();
-  // Note(Lokathor): The PNG spec is extremely specific that you shall not,
-  // "under any circumstances", alter the order of evaluation of this
-  // expression's tests.
-  if pa <= pb && pa <= pc {
-    a
-  } else if pb <= pc {
-    b
-  } else {
-    c
   }
 }
