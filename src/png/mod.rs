@@ -5,7 +5,6 @@
 //! [png-spec]: https://www.w3.org/TR/2003/REC-PNG-20031110/
 
 use crate::{sRGBIntent, ImagineError};
-use bitfrob::u8_replicate_bits;
 use core::fmt::{Debug, Write};
 use pixel_formats::{r32g32b32a32_Sfloat, r8g8b8_Unorm, r8g8b8a8_Unorm};
 
@@ -199,6 +198,7 @@ where
 {
   #[allow(unused)]
   use alloc::vec::Vec;
+  use bitfrob::{U8_SCALE_1_TO_8, U8_SCALE_2_TO_8, U8_SCALE_4_TO_8};
   use bytemuck::cast_slice;
   use pixel_formats::{r8g8b8_Srgb, r8g8b8a8_Srgb};
 
@@ -328,12 +328,18 @@ where
       ihdr.unfilter_decompressed_data(&mut zlib_buffer, unfilter_op).ok();
     }
     PngColorType::Y if is_srgb => {
+      let mult = match ihdr.bit_depth {
+        1 => U8_SCALE_1_TO_8,
+        2 => U8_SCALE_2_TO_8,
+        4 => U8_SCALE_4_TO_8,
+        _ => 1,
+      };
       let unfilter_op = |x: u32, y: u32, data: &[u8]| {
         if let Some(p) = bitmap.get_mut(x, y) {
           *p = if Some(u16::from(data[0])) == trns_y {
             transparent_black
           } else {
-            let y = u8_replicate_bits(u32::from(ihdr.bit_depth), data[0]);
+            let y = data[0] * mult;
             P::from(r32g32b32a32_Sfloat::from(r8g8b8a8_Srgb { r: y, g: y, b: y, a: u8::MAX }))
           };
         }
@@ -341,12 +347,18 @@ where
       ihdr.unfilter_decompressed_data(&mut zlib_buffer, unfilter_op).ok();
     }
     PngColorType::Y => {
+      let mult = match ihdr.bit_depth {
+        1 => U8_SCALE_1_TO_8,
+        2 => U8_SCALE_2_TO_8,
+        4 => U8_SCALE_4_TO_8,
+        _ => 1,
+      };
       let unfilter_op = |x: u32, y: u32, data: &[u8]| {
         if let Some(p) = bitmap.get_mut(x, y) {
           *p = if Some(u16::from(data[0])) == trns_y {
             transparent_black
           } else {
-            let y = u8_replicate_bits(u32::from(ihdr.bit_depth), data[0]);
+            let y = data[0] * mult;
             let y = (y as f32) / (u8::MAX as f32);
             let sfloat = r32g32b32a32_Sfloat { r: y, g: y, b: y, a: 1.0 };
             let gamma_corrected = r32g32b32a32_Sfloat {
