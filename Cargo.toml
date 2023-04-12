@@ -13,13 +13,13 @@ autoexamples = false
 [features]
 default = ["alloc", "miniz_oxide", "png", "bmp", "netpbm"]
 alloc = []
-png = [] # Portable Network Graphics
+png = ["png_filters"] # Portable Network Graphics
 bmp = [] # Windows Bitmap
 netpbm = [] # Covers all the Netpbm files: pbm, pgm, ppm, pnm, pam
 
 [dependencies]
 pixel_formats = "0.1.5"
-png_filters = "0.1"
+png_filters = { version = "0.1", optional = true }
 bytemuck = { version = "1.13.1", features = ["derive", "min_const_generics"] }
 bitfrob = { version = "1.2.0", features= ["track_caller"] }
 miniz_oxide = { version = "0.7.1", default-features = false, optional = true }
