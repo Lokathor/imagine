@@ -57,6 +57,7 @@ pub fn bmp_try_bitmap_rgb<P>(
 where
   P: Copy + From<r32g32b32_Sfloat>,
 {
+  #[allow(unused)]
   use alloc::vec::Vec;
 
   let header = bmp_get_nice_header(bytes)?;
@@ -249,6 +250,7 @@ pub fn bmp_try_bitmap_rgba<P>(
 where
   P: Copy + From<r32g32b32a32_Sfloat>,
 {
+  #[allow(unused)]
   use alloc::vec::Vec;
 
   let header = bmp_get_nice_header(bytes)?;

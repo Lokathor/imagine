@@ -262,6 +262,7 @@ pub fn netpbm_try_bitmap_rgb<P>(bytes: &[u8]) -> Result<crate::Bitmap<P>, Imagin
 where
   P: Copy + From<r32g32b32_Sfloat>,
 {
+  #[allow(unused)]
   use alloc::vec::Vec;
   //
   let (header, _rest) = netpbm_pull_header(bytes)?;
@@ -291,6 +292,7 @@ pub fn netpbm_try_bitmap_rgba<P>(
 where
   P: Copy + From<r32g32b32a32_Sfloat>,
 {
+  #[allow(unused)]
   use alloc::vec::Vec;
   //
   let (header, _rest) = netpbm_pull_header(bytes)?;

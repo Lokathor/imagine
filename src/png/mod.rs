@@ -197,6 +197,7 @@ pub fn png_try_bitmap_rgba<P>(
 where
   P: Copy + From<r32g32b32a32_Sfloat>,
 {
+  #[allow(unused)]
   use alloc::vec::Vec;
   use bytemuck::cast_slice;
   use pixel_formats::{r8g8b8_Srgb, r8g8b8a8_Srgb};
